@@ -18,6 +18,7 @@ I use Microsoft SQL Server on Linux, SQLite should be possible but is untested
 # Why I share this in this state
 It took me thousands of hours, for the framework (it's totally reuseable) and it breaks my heart to see so much winforms and other disgusting stuff of the past while we can do all without stores,
 with Wasm, on any Operation System (I hosted it on Windows and Linux Server).
+I basically stopped using TGram so I don't need to manage groups.
 The WinUI Example OnTOp shows how to replace any Winforms app with Blazor and full data and Auth Model so!
 Hope you learn a lot, have fun, do whatever you like.
 
