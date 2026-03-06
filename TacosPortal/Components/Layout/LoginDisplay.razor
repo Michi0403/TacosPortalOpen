@@ -1,0 +1,303 @@
+﻿@using TacosCore.BusinessObjects.DataTypes.PermissionBaseObjects
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@implements IDisposable
+@inject IWebAPI           Api
+@inject IJSRuntime        JS
+@inject NavigationManager Nav
+@inject INotificationService Notifier
+@inject ILogger<LoginDisplay> Log
+<div>
+      <DxLoadingPanel   CssClass="w-100" @bind-Visible="PanelVisible"  CloseOnClick="true"   IndicatorVisible="true"
+                IsContentBlocked="false"
+                IndicatorAreaVisible="false"
+                Text="Fetching Data...">
+  
+    <AuthorizeView>
+    <Authorized>
+        <div class="btn-container d-flex">
+            <DxButton Text="@ProfileBtn"
+                      CssClass="buttonfullwidth"
+                      RenderStyle="ButtonRenderStyle.Primary"
+                      RenderStyleMode="ButtonRenderStyleMode.Contained"
+                      SizeMode="SizeMode.Large"
+                      Click="@ShowProfile" />
+            <DxButton Text="Logout"
+                      CssClass="buttonfullwidth"
+                      RenderStyle="ButtonRenderStyle.Primary"
+                      RenderStyleMode="ButtonRenderStyleMode.Contained"
+                      SizeMode="SizeMode.Large"
+                      Click="@Logout" />
+        </div>
+    </Authorized>
+
+    <NotAuthorized>
+        <div class="btn-container d-flex">
+            <DxButton Text="Guest – Login"
+                      CssClass="buttonfullwidth"
+                      RenderStyle="ButtonRenderStyle.Primary"
+                      RenderStyleMode="ButtonRenderStyleMode.Contained"
+                      SizeMode="SizeMode.Large"
+                      Click="@(() => Nav.NavigateTo("/login"))" />
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+<DxPopup HeaderText="Profile" @bind-Visible="_popup">
+    <BodyContentTemplate>
+        <div>
+            <button class="btn btn-primary" @onclick="Subscribe">Enable Notifications</button>
+            @if (_user != null && _user.UserName != null)
+            {
+                <DxTextBox @bind-Text="_user.UserName" NullText="UserName Empty" Enabled="false" />
+            }
+
+            @if (_user != null )
+            {
+                        <DxTextBox @bind-Guid="_user.ID" NullText="ID Empty" Enabled="false" />
+            }
+
+            @if (_user != null && _user.Email != null)
+            {
+                <DxTextBox @bind-Text="_user.Email" NullText="Email Empty" Enabled="false" />
+            }
+            @if (_user != null && _user.Roles != null && _user.Roles.Count > 0)
+            {
+                @foreach (var role in _user.Roles)
+                {
+                    <DxTextBox Text="@role.Name" NullText="Role Empty" Enabled="false" />
+                }
+
+            }
+        </div>
+    </BodyContentTemplate>
+</DxPopup>
+    </DxLoadingPanel>
+</div>
+
+
+@code
+{
+    ApplicationUser? _user;
+    bool       _popup;
+    private bool disposedValue;
+    bool PanelVisible { get; set; } = false;
+    string ProfileBtn => _user is null ? "Loading…" : $"Profile ({_user.UserName})";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+
+            PanelVisible = true;
+
+            if (firstRender)
+            {
+                try
+                {
+
+                    await LoadAsync().ConfigureAwait(false);
+                    // if(_user!=null)
+                    // {
+                    //     var mod = await JS.InvokeAsync<IJSObjectReference>("import", "/js/push.js");
+                    //     await mod.InvokeAsync<object>("setupPush");
+                    // }
+                }
+                catch (OperationCanceledException)
+                { /* ignored – user navigated */
+                }
+                catch (Exception ex)
+                {
+                    Log.LogError(ex, "OnAfterRenderAsync failed");
+                    Notifier.ShowError("LoginDisplayToasts", ex.Message, "OnAfterRenderAsync error");
+                }
+            }
+        }
+        finally
+        {
+            PanelVisible = false;
+
+        }
+
+    }
+    private async Task Subscribe()
+    {
+        try
+        {
+            var result = await JS.InvokeAsync<object>("setupPush").ConfigureAwait(false);
+       
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Subscribe failed");
+            Notifier.ShowError("LoginDisplayToasts", ex.Message, "Subscribe error");
+        }
+       
+        // Optionally toast the result
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+            await LoadAsync().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "OnInitializedAsync failed");
+            Notifier.ShowError("LoginDisplayToasts", ex.Message, "OnInitializedAsync error");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+
+    }
+    async Task LoadAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+            {
+                var user = await Api.GetUserInfoAsync(cts.Token).ConfigureAwait(false);
+                if (user != null)
+                {
+                    _user = user;
+
+                }
+                
+              
+            }
+
+        }
+        catch (OperationCanceledException) 
+        { /* ignored – user navigated */ 
+        }
+        catch(HttpRequestException ex)
+        {
+            Log.LogWarning(ex, $"Error in LoadAsync HTTPRequestexception: {ex.ToString()}");
+            if (ex.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+            {
+                throw;
+            }
+        }
+        catch(JsonException ex)
+        {
+            Log.LogError(ex, $"Json Exception {ex.ToString()}");
+            Notifier.ShowError("LoginDisplayToasts", ex.Message, "LoadAsync JsonException error");
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "GetMyUserAsync failed");
+            Notifier.ShowError("LoginDisplayToasts", ex.Message, "LoadAsync error");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+    Task ShowProfile()
+    {
+        try
+        {
+            PanelVisible = true;
+            _popup = true;
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "ShowProfile failed");
+            Notifier.ShowError("LoginDisplayToasts", ex.Message, "ShowProfile error");
+        }
+        finally
+        {
+            PanelVisible = false;        
+           
+        }
+        return Task.CompletedTask;
+    }
+
+    async Task Logout()
+    {
+        try
+        {
+            PanelVisible = true;
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+            {
+                var user = await Api.GetUserInfoAsync(cts.Token).ConfigureAwait(false);
+                if (user != null)
+                    _user = user;
+                using (var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+                {
+                    if (await Api.LogoutAsync(cts2.Token).ConfigureAwait(true))
+                    {
+                        await JS.InvokeVoidAsync("logoutToDeleteCookies").ConfigureAwait(false);
+                        Notifier.ShowSuccess("LoginDisplayToasts",
+                                             "Logged out – redirecting…",
+                                             "Logout");
+                        await Task.Delay(1500).ConfigureAwait(false);
+                        Nav.NavigateTo("/", forceLoad: true);
+                    }
+                }
+
+            }
+        
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Logout failed");
+            Notifier.ShowError("LoginDisplayToasts", ex.Message, "Logout error");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+    protected virtual void Dispose(bool disposing)
+    {
+        try
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                //...
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+                // TODO: set large fields to null
+                disposedValue = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Dispose failed");
+            Notifier.ShowError("LoginDisplayToasts", ex.Message, "Dispose error");
+        }
+      
+    }
+
+    // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+    // ~WebAPIClient()
+    // {
+    //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+    //     Dispose(disposing: false);
+    // }
+
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+}

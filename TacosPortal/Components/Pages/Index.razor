@@ -1,0 +1,69 @@
+﻿@namespace TacosPortal.Components.Pages
+@rendermode @(new InteractiveServerRenderMode(prerender: true))
+@page "/"
+<PageTitle>Welcome on our Landing Page</PageTitle>
+<div class="main-content">
+    <AuthorizeView>
+            <NotAuthorized>
+                <LoginDisplay/>
+            </NotAuthorized>
+    </AuthorizeView>
+
+    <DxGridLayout CssClass="welcome-gridlayout" RowSpacing="3rem">
+        <Rows>
+            <DxGridLayoutRow Height="auto" Areas="header"></DxGridLayoutRow>
+            <DxGridLayoutRow Height="auto" Areas="cards"></DxGridLayoutRow>
+        </Rows>
+        <Items>
+            <DxGridLayoutItem Area="header" CssClass="title">
+                <Template>
+                    <div class="title-header-text">Hello to Taco-Portal!</div>
+                    <div class="title-content-text">Navigate with the Menu in the upper Left through all Pages</div>
+                </Template>
+            </DxGridLayoutItem>
+            <DxGridLayoutItem Area="cards" CssClass="welcome-cards">
+                <Template>
+                   @*  <h2>Hi guys, Open the Menu in the Upper left, choose any way to login</h2>
+                    <NavLink class="welcome-card" href="@UrlGenerator.GetUrl("/counter", ToggledSidebar)">
+                        
+                        <svg class="welcome-card-img" alt="counter card">
+                            <use href="images/cards.svg#counter"></use>
+                        </svg>
+                        <div class="welcome-card-text">Counter</div>
+                        <div class="welcome-card-back"></div>
+                    </NavLink>
+                    <NavLink class="welcome-card" href="@UrlGenerator.GetUrl("/weather", ToggledSidebar)">
+                        <svg class="welcome-card-img" alt="weather card">
+                            <use href="images/cards.svg#weather"></use>
+                        </svg>
+                        <div class="welcome-card-text">Weather</div>
+                        <div class="welcome-card-back"></div>
+                    </NavLink>
+                    <NavLink class="welcome-card" href="@UrlGenerator.GetUrl("/administration", ToggledSidebar)">
+
+                        <svg class="welcome-card-img" alt="administration card">
+                            <use href="images/doc.svg"></use>
+                        </svg>
+                        <div class="welcome-card-text">Administration</div>
+                        <div class="welcome-card-back"></div>
+                    </NavLink> *@
+                    @* <NavLink class="welcome-card" href="@UrlGenerator.GetUrl("/admin", ToggledSidebar)">
+
+                        <svg class="welcome-card-img" alt="administration card">
+                            <use href="images/doc.svg"></use>
+                        </svg>
+                        <div class="welcome-card-text">Administration</div>
+                        <div class="welcome-card-back"></div>
+                    </NavLink> *@
+                </Template>
+            </DxGridLayoutItem>
+        </Items>
+    </DxGridLayout>
+  
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = UrlGenerator.ToggleSidebarName)]
+    public bool ToggledSidebar { get; set; }
+
+}

@@ -1,0 +1,190 @@
+﻿@using TacosCore.BusinessObjects.DataTypes.TelegramTypes
+@using global::Telegram.Bot
+@using global::Telegram.Bot.Types
+@using global::Telegram.Bot.Types.Enums
+@inject ILogger<ChatMemberList> Log
+@inject INotificationService Notifier
+@inject ITelegramBotClient telegramBot
+@inject IWebAPI WebApi
+@rendermode InteractiveServer
+<div>
+    <h3>Active Memberlist</h3>
+    <AuthorizeView Roles="Administrators,TelegramAdmin">
+        <Authorized>
+            <ToastWrapper Name="ChatMemberListToasts" ThemeMode="@ToastThemeMode.Dark" />
+            @if (telegramChatMembers != null)
+            {
+               <DxLoadingPanel CssClass="w-100" @bind-Visible="PanelVisible" CloseOnClick="true"
+                                IndicatorVisible="true"
+                                IsContentBlocked="false"
+                                IndicatorAreaVisible="false"
+                                Text="Fetching Data...">
+
+                    <DxGrid @ref="Grid" Data="telegramChatMembers" 
+                            AllowColumnReorder="true"
+                            AllowDragRows="true"
+                            AllowGroup="true"
+                            AllowSort="true"
+                            ShowGroupPanel="true"
+                            ShowFilterRow="true"
+                            ShowSearchBox="true"
+                           SearchBoxNullText="Search for whatever... Fulltext"
+                            AutoCollapseDetailRow="AutoCollapseDetailRow"
+                            ColumnResizeMode="GridColumnResizeMode.NextColumn" 
+                            TextWrapEnabled="false" 
+                            PageSize="20">
+                        <Columns>
+                            <DxGridDataColumn FieldName="IsBot" />
+                            <DxGridDataColumn FieldName="UserId" />
+                            <DxGridDataColumn FieldName="FirstName" />
+                            <DxGridDataColumn FieldName="LastName" />
+                            <DxGridDataColumn FieldName="LastName" />
+                            <DxGridDataColumn FieldName="Username" />
+                            <DxGridDataColumn FieldName="LanguageCode" />
+                            <DxGridDataColumn FieldName="IsPremium" />
+                            <DxGridDataColumn FieldName="CanJoinGroups" />
+                            <DxGridDataColumn FieldName="CanReadAllGroupMessages" />
+                            <DxGridDataColumn FieldName="SupportsInlineQueries" />
+                        </Columns>
+                        <DetailRowTemplate Context="rowContext">
+                            <UserDetail User="(TelegramUser)rowContext.DataItem" ChatFullInfo="@ChatFullInfo" />
+                        </DetailRowTemplate>
+                        <ToolbarTemplate Context="toolbarContext">
+                            <DxToolbar ItemRenderStyleMode="ToolbarRenderStyleMode.Plain">
+                                <Items>
+                                    <DxToolbarItem BeginGroup="true" Alignment="ToolbarItemAlignment.Left">
+                                        <Template Context="toolbar_item_context">
+                                            <div class="d-flex flex-row align-items-center">
+                                                <DxCheckBox @bind-Checked="AutoCollapseDetailRow">
+                                                    Auto Collapse Detail Rows
+                                                </DxCheckBox>
+                                            </div>
+                                        </Template>
+                                    </DxToolbarItem>
+                                </Items>
+                            </DxToolbar>
+                        </ToolbarTemplate>
+                    </DxGrid>
+
+                </DxLoadingPanel> 
+
+            }
+        </Authorized>
+        <NotAuthorized>
+            <LoginDisplay />
+        </NotAuthorized>
+    </AuthorizeView>
+   
+</div>
+
+
+@code {
+    [Parameter]
+    public TelegramChatFullInfo ChatFullInfo { get; set; }
+    private ChatId chatId { get; set; }
+    private ChatFullInfo? telegramChatFullInfo { get; set; }
+    private ObservableCollection<TelegramUser> telegramChatMembers { get; set; } = new();
+    private ObservableCollection<TelegramUserChat> telegramUserChats { get; set; } = new();
+    bool isValid { get; set; }
+    bool AutoCollapseDetailRow { get; set; }
+    bool PanelVisible { get; set; } = true;
+    IGrid? Grid { get; set; }
+    IGrid? GridChatMembers { get; set; }
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+            await LoadAsync().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnInitializedAsync {ex.ToString()}");
+            Notifier.ShowError("ChatMemberListToasts", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+        }
+
+    }
+    public async Task<IEnumerable<TelegramUser>> GetUsersByChatAsync(Guid chatId, CancellationToken? ct = null)
+    {
+        try
+        {
+            var path = $"api/odata/TelegramChat({chatId})?$expand=TelegramUserChatsThisChatBelongsTo($select=User;$expand=User($select=ID,UserId,CanJoinGroups,CanReadAllGroupMessages,SupportsInlineQueries,IsBot,FirstName,LastName,Username,LanguageCode,IsPremium))";
+
+            // Deserialize as a SINGLE TelegramChat (matches the $entity payload)
+            var chat = await WebApi.GetEntityByPathAsync<TelegramChat>(path, ct);
+
+            // Fail-fast if the expand didn’t materialize (your preference)
+            if (chat.TelegramUserChatsThisChatBelongsTo == null)
+                throw new InvalidOperationException("Expected TelegramUserChatsThisChatBelongsTo to be expanded.");
+
+            // Project expanded users
+            var users = chat.TelegramUserChatsThisChatBelongsTo
+                .Select(l => l.User ?? throw new InvalidOperationException("Expanded User is null on a link row."))
+                .ToList();
+
+            return users;
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"GetUsersByChatAsync failed {ex.ToString()}");
+            Notifier.ShowError("ChatMemberListToasts", ex.Message, "GetUsersByChatAsync error");
+            return Array.Empty<TelegramUser>();
+        }
+    }
+
+    async Task LoadAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+            using (var ctsUser = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+            {
+                long? tgChatID = ChatFullInfo.Chat?.ChatId;
+                if (tgChatID != null)
+                {
+                    chatId = new(tgChatID.Value);
+                }
+                //var userChatsToDisplay = await GetUserChtssByChatAsync(ChatFullInfo.Chat.ID);
+                var chatMembersToDisplay = await GetUsersByChatAsync(ChatFullInfo.Chat.ID, ctsUser.Token);
+                //var chatMembersToDisplay = userChatsToDisplay.Where(filter => filter.User!=null).Select(select => select.User).ToList();
+
+                if (chatMembersToDisplay != null)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await telegramChatMembers.SyncWith(
+                            chatMembersToDisplay, m => m.ID, configuredTaskAwaitableToInformUpdates: InvokeAsync(StateHasChanged).ConfigureAwait(false)).ConfigureAwait(false);
+                    }).ConfigureAwait(false);
+                }
+                await base.OnInitializedAsync().ConfigureAwait(false);
+            }
+
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (HttpRequestException ex)
+        {
+            Log.LogError(ex, $"Error in LoadAsync HTTPRequestexception: {ex.ToString()}");
+            if (ex.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+            {
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"GetMyUserAsync failed {ex.ToString()}");
+            Notifier.ShowError("ChatMemberListToasts", ex.Message, "LoadAsync error");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+}

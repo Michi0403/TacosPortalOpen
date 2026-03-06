@@ -1,0 +1,163 @@
+﻿@using TacosCore.BusinessObjects.DataTypes.TelegramTypes
+@using global::Telegram.Bot
+@using global::Telegram.Bot.Types
+@inject ITelegramBotClient telegramBot
+@inject ILogger<ChatDetail> Log
+@inject INotificationService Notifier
+@rendermode InteractiveServer
+<ToastWrapper Name="ChatDetailToast" ThemeMode="@ToastThemeMode.Dark" />
+<style>
+    .auto-size-item {
+        flex: 0 0 auto; /* prevents stretching */
+        align-self: flex-start; /* override align if needed */
+    }
+</style>
+<AuthorizeView Roles="Administrators,TelegramAdmin">
+    <Authorized>
+        <DxPopup @bind-Visible="@PopupChatVisible"
+            Height="30%"
+            Width="90%"
+            ShowFooter="true"
+            HeaderText="Prepare Message">
+            <BodyContentTemplate Context="bodyContentContext">
+                    <SendMessage ChatId="@chatId" />
+            </BodyContentTemplate>
+            <FooterContentTemplate Context="footerContentContext">
+                <DxButton CssClass="popup-button" RenderStyle="ButtonRenderStyle.Primary" Text="OK" Click="@(() => PopupChatVisible = false)" />
+                <DxButton CssClass="popup-button" RenderStyle="ButtonRenderStyle.Secondary" Text="Cancel" Click="@(() => PopupChatVisible = false)" />
+            </FooterContentTemplate>
+        </DxPopup>
+        <DxPopup @bind-Visible="@PopupChatMemberVisible"
+                 Height="90%"
+                 Width="90%"
+            ShowFooter="true"
+            HeaderText="Bot Known Chat Members">
+            <BodyContentTemplate Context="bodyContentContext2">
+                    <ChatMemberList ChatFullInfo=@ChatFullInfo />
+            </BodyContentTemplate>
+            <FooterContentTemplate Context="footerContentContext2">
+                <DxButton CssClass="popup-button" RenderStyle="ButtonRenderStyle.Primary" Text="OK" Click="@(() => PopupChatMemberVisible = false)" />
+                <DxButton CssClass="popup-button" RenderStyle="ButtonRenderStyle.Secondary" Text="Cancel" Click="@(() => PopupChatMemberVisible = false)" />
+            </FooterContentTemplate>
+        </DxPopup>
+        <DxStackLayout Orientation="@currentOrientation">
+            <Items>
+                <DxStackLayoutItem CssClass="auto-size-item" Length="auto">
+                    <Template>
+                            <div>Commands</div>
+                            <DxButtonGroup RenderStyle="ButtonRenderStyle.Secondary" SelectionMode="ButtonGroupSelectionMode.Single">
+                                <Items>
+                                    <DxButtonGroupItem Text="change Title" Click="@(async() =>await ChangeTitle())" />
+                                    <DxButtonGroupItem Text="change Description" Click="@(async () => await ChangeDescription())" />
+                                    <DxButtonGroupItem Text="send Message" Click="@(() => PopupChatVisible = true)" />
+                                    <DxButtonGroupItem Text="ChatMembers" Click="@(() => PopupChatMemberVisible = true)" />
+                                </Items>
+                            </DxButtonGroup>
+
+                    </Template>
+                </DxStackLayoutItem>
+                <DxStackLayoutItem CssClass="auto-size-item" Length="auto">
+                    <Template>
+                        <label for="tbChatTitle">
+                            Chat Title Inputfield
+                        </label>
+                        <DxTextBox @bind-Text="@TitleValue"
+                                   InputId="tbChatTitle" />
+                        <label for="tbDescriptionTitle" >
+                            Chat Description Inputfield
+                        </label>
+                        <DxTextBox @bind-Text="@DescriptionValue"
+                                   InputId="tbDescriptionTitle" />
+                    </Template>
+                </DxStackLayoutItem>
+                <DxStackLayoutItem Length="auto">
+            <Template>
+                    <ChatAdministrators ChatFullInfo="@ChatFullInfo"/>
+            </Template>
+        </DxStackLayoutItem>
+                @* 
+        <DxStackLayoutItem>
+            <Template>
+               
+            </Template>
+        </DxStackLayoutItem>
+        <DxStackLayoutItem>
+            <Template>
+               
+            </Template>
+        </DxStackLayoutItem>  *@
+            </Items>
+        </DxStackLayout>
+    </Authorized>
+    <NotAuthorized>
+        <LoginDisplay />
+    </NotAuthorized>
+</AuthorizeView>
+
+
+
+@code {
+    [Parameter]
+    public TelegramChatFullInfo ChatFullInfo { get; set; } = null!;
+    [Parameter]
+    public Orientation currentOrientation { get; set; } = Orientation.Vertical;
+    private ChatId chatId { get; set; }
+    bool PopupChatVisible { get; set; }
+    bool PopupChatMemberVisible { get; set; }
+    string? TitleValue { get; set; } = null!;
+    string DescriptionValue { get; set; } = null!;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if(!string.IsNullOrWhiteSpace(ChatFullInfo.Chat?.Title))
+                TitleValue = ChatFullInfo.Chat?.Title;
+            long? tgChatId = ChatFullInfo.Chat?.ChatId;
+            if(tgChatId!=null)
+                chatId = new(tgChatId.Value);
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnInitializedAsync {ex.ToString()}");
+            Notifier.ShowError("ChatDetailToast", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+        }
+
+    }
+    private async Task ChangeTitle()
+    {
+        try
+        {
+
+            await telegramBot.SetChatTitle(chatId, TitleValue);
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in ChangeTitle {ex.ToString()}");
+            Notifier.ShowError("ChatDetailToast", $"Exception: {ex.ToString()}", "Error in ChangeTitle!");
+        }
+    }
+    private async Task ChangeDescription()
+    {
+        try
+        {
+            await telegramBot.SetChatDescription(chatId, TitleValue);
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in ChangeDescription {ex.ToString()}");
+            Notifier.ShowError("ChatDetailToast", $"Exception: {ex.ToString()}", "Error in ChangeDescription!");
+        }
+    }
+}

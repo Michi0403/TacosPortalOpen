@@ -1,0 +1,40 @@
+﻿@inject IWebAPI WebApi
+@inject INotificationService Notifier
+@rendermode InteractiveServer
+@page "/administration"
+<div>
+   
+    <h3>Administration ServerInteractive</h3>
+    <AuthorizeView Roles="Administrators,TelegramAdmin">
+        <Authorized>
+
+            <ToastWrapper Name="AdmininistrationToasts" ThemeMode="@ToastThemeMode.Dark" />
+            <PageTitle>Administration ServerInteractive</PageTitle>
+            <DxSplitter Orientation="Orientation.Vertical" CssClass="admin-splitter">
+                <Panes>
+                    <DxSplitterPane Size="auto" MinSize="200px" AllowResize="true" AllowCollapse="true">
+                        <TacosPortal.Components.Pages.Admin.UserAdministration />
+                    </DxSplitterPane>
+
+                    <DxSplitterPane Size="auto" MinSize="200px" AllowResize="true" AllowCollapse="true">
+                        <TacosPortal.Components.Pages.Admin.RoleAdministration />
+                    </DxSplitterPane>
+
+                    <DxSplitterPane Size="auto" MinSize="200px" AllowResize="true" AllowCollapse="true">
+                        <TacosPortal.Components.Pages.Admin.PermissionPolicyTypePemissiobObjectAdministration />
+                    </DxSplitterPane>
+                </Panes>
+            </DxSplitter>
+
+        </Authorized>
+        <NotAuthorized>
+            <LoginDisplay />
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Notifier.ShowRegular("AdmininistrationToasts", "Welcome to Admin Area", "Godmode");
+    }
+}

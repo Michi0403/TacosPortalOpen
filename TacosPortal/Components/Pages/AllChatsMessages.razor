@@ -1,0 +1,775 @@
+﻿@inject IWebAPI WebApi
+@inject INotificationService Notifier
+@inject IJSRuntime JS
+@using DevExpress.Blazor.Office
+@using System.Text.Json.Serialization
+@using TacosCore.BusinessObjects.DataTypes.TelegramTypes
+@inject ILogger<AllChatsMessages> Log
+@inject ITelegramBotClient telegramBot
+@inject ITacosApi tacosApi
+@inject NavigationManager NavManager
+@using Microsoft.AspNetCore.SignalR.Client
+@using global::Telegram.Bot
+@using global::Telegram.Bot.Types
+@using global::Telegram.Bot.Types.Enums
+@inject ConfigurationRoot AppConfig
+
+@implements IDisposable
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+@page "/allChatsMessages"
+<div>
+    <h5>Send Message Global ServerInteractive</h5>
+
+    <AuthorizeView Roles="Administrators,TelegramAdmin">
+            <Authorized >
+                <DxLoadingPanel CssClass="w-100" @bind-Visible="PanelVisible" CloseOnClick="true"
+                                IndicatorVisible="true"
+                                IsContentBlocked="false"
+                                IndicatorAreaVisible="false"
+                                Text="Fetching Data...">
+
+                    <ToastWrapper Name="SendMessageGlobalToasts" ThemeMode="@ToastThemeMode.Dark" />
+                    <PageTitle>Administration ServerInteractive</PageTitle>
+                    <div >
+                        <DxCheckBox @bind-Checked="@AutoScollEnable">AutoScroll Enable</DxCheckBox>
+                    </div>
+                    @if (_hubConnection != null)
+                    {
+                        @switch(_hubConnection.State)
+                        {
+                            @case HubConnectionState.Connecting:
+                            @case HubConnectionState.Reconnecting:
+                                <h5 class="text-warning">Connection State: @_hubConnection.State.ToString()</h5>
+                                break;
+                            @case HubConnectionState.Connected:
+                                <h5 class="text-success">Connection State: @_hubConnection.State.ToString()</h5>
+                                break;
+                            @case HubConnectionState.Disconnected:
+                                <h5 class="text-danger">Connection State: @_hubConnection.State.ToString()</h5>
+                                break;
+                        }
+                        
+                    }
+                    else
+                    {
+                    <h5 class="text-danger">Signal R Hub connection still builds up, takes some seconds... no haste...</h5>
+                    }
+                        <div id="chat-container">
+                    <div id="chat-window">
+ 
+                        @foreach (var message in TelegramMessages)
+                        {
+                            <div class="message" tabindex="0">
+                                <div class="name">
+                                    Chat: @message.Chat?.Title
+                                    DateTime: @(message.Date == default || message.Date == null ? "N/A" : message.Date.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))
+                                    UserID: @message.From?.UserId |
+                                    Username: @message.From?.Username |
+                                    Firstname: @message.From?.FirstName |
+                                    Lastname: @message.From?.LastName |
+                                    Language: @message.From?.LanguageCode
+                                    IsBot: @message.From?.IsBot
+                                    @if(message.ReplyToMessage!=null)
+                                    {
+                                        <p>
+                                            Reply To @(message.ReplyToMessage?.Date == default || message.ReplyToMessage?.Date == null ? "N/A" : message.ReplyToMessage?.Date.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))
+                                            @message.ReplyToMessage?.From?.Username
+                                            @message.ReplyToMessage?.Text</p>
+                                       
+                                    }
+                                </div>
+                                <div class="text">@message.Text</div>
+                            </div>
+                        }
+                    </div>
+
+                </div>
+                <div id="editor-container">
+                    <div id="editor-container-row" class="editor-button-row">
+                        <DxHtmlEditor @ref="@htmlEditor"
+                                      Height="200px"
+                                      @bind-Markup="@markup"
+                                      CustomizeToolbar="@OnCustomizeToolbar"
+                                      BindMarkupMode="HtmlEditorBindMarkupMode.OnDelayedInput"
+                                      InputDelay="100"
+                                      IsValid="@isValid"
+                                      MediaResizeEnabled="true"
+                                      TableResizeEnabled="true"
+                                      AllowSoftLineBreak="true"
+                                      CssClass="editor-area">
+                            <DxHtmlEditorMentions>
+                                <DxHtmlEditorMention Data="@TelegramUsersData"
+                                                     DisplayFieldName="@nameof(TelegramUser.Username)"
+                                                     SearchFieldNames="@SearchFieldNames" />
+                            </DxHtmlEditorMentions>
+                        </DxHtmlEditor>
+
+                        <DxButton Text="Send"
+                                  SizeMode="SizeMode.Large"
+                                  Click="OnClick"
+                                  CssClass="chat-button" />
+                    </div>
+                </div>
+                </DxLoadingPanel>
+
+            </Authorized>
+            <NotAuthorized>
+                <LoginDisplay />
+            </NotAuthorized>
+        </AuthorizeView>
+</div>
+@code 
+{
+    DxHtmlEditor? htmlEditor { get; set; }
+    bool isValid { get; set; }
+    [Parameter]
+    public string markup { get; set; } = string.Empty;
+    [Parameter]
+    public ObservableCollection<TelegramUser> TelegramUsersData { get; set; } = new();
+    [Parameter]
+    public ObservableCollection<TelegramMessage> TelegramMessages { get; set; } = new();
+    Uri? _hubUri;
+    private string? _baseUrl;
+    bool PanelVisible { get; set; } = true;
+    ObservableCollection<ChatFullInfo> TelegramChatFullInfos { get; set; } = new();
+    private string[] SearchFieldNames { get; set; } = { nameof(TelegramUser.Username), nameof(TelegramUser.FirstName), nameof(TelegramUser.LastName) };
+    private HubConnection? _hubConnection;
+    private bool _disposed;
+    [Parameter]
+    public bool AutoScollEnable { get; set; }
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        try
+        {
+            if (_disposed)
+                return;
+
+            if (disposing)
+            {
+                // _ctsTimerTask?.Cancel();
+                // _ctsTimerTask?.Dispose();
+                markup = string.Empty;
+                if (!TelegramUsersData.Any())
+                    TelegramUsersData.Clear(); // safe
+                else
+                    TelegramUsersData = new(); // safer, breaks bindings
+                if (!TelegramMessages.Any())
+                    TelegramMessages.Clear(); // safe
+                else
+                    TelegramMessages = new(); // safer, breaks bindings
+                tacosApi?.Dispose();
+                WebApi?.Dispose();
+                Log.LogInformation("Executing Dispose");
+                _disposed = true;
+            }
+
+            _disposed = true;
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in Dispose {ex.ToString()}");
+        }
+
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        try
+        {
+            if (_hubConnection != null)
+            {
+                if (_hubConnection.State != HubConnectionState.Disconnected)
+                    await _hubConnection.StopAsync().ConfigureAwait(false);
+
+                await _hubConnection.DisposeAsync().ConfigureAwait(false);
+                _hubConnection = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Error in DisposeAsync");
+        }
+
+        Dispose(disposing: false);
+        GC.SuppressFinalize(this);
+    }
+    // public async ValueTask DisposeAsync()
+    // {
+    //     if (_disposed)
+    //         return;
+
+    //     try
+    //     {
+    //         if (_hubConnection is not null)
+    //         {
+    //             if (_hubConnection.State != HubConnectionState.Disconnected)
+    //                 await _hubConnection.StopAsync().ConfigureAwait(false);
+    //             await _hubConnection.DisposeAsync().ConfigureAwait(false);
+    //         }
+
+    //         // Optional: any other async cleanup logic
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Log.LogError(ex, $"Error in DisposeAsync {ex.ToString()}");
+    //     }
+
+    //     // Optionally call Dispose for sync resources
+    //     Dispose(disposing: false);
+    //     GC.SuppressFinalize(this);
+    // }
+    // private Uri GetSafeHubUri()
+    // {
+    //     try
+    //     {
+    //         return UriBuilderHelper.BuildAbsoluteUriFromConfig(AppConfig, "chathub");
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Log?.LogError(ex, "Failed to build SignalR Hub URI from config.");
+    //         return new Uri("https://localhost:5001/chathub");
+    //     }
+    // }
+    private Uri GetSafeHubUri()
+    {
+        if (_hubUri != null) return _hubUri;
+
+        if (NavManager.Uri.StartsWith("http"))
+        {
+            _hubUri = UriBuilderHelper.BuildAbsoluteUriFromConfig("chathub");
+        }
+        else
+        {
+            // still prerendering, postpone init
+            throw new InvalidOperationException("Attempted to build hub URI during prerender.");
+        }
+
+        return _hubUri;
+    }
+
+    private async Task EnsureBaseUrlAsync()
+    {
+        if (_baseUrl != null)
+            return;
+
+        try
+        {
+            _baseUrl = await JS.InvokeAsync<string>("eval", "window.location.origin");
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Failed to retrieve base URL from JS. {ex.ToString()}");
+
+        }
+    }
+    // private Uri GetSafeHubUri()
+    // {
+    //     try
+    //     {
+    //         var url = UriBuilderHelper.BuildAbsoluteUriFromConfig(AppConfig, "chathub");
+    //         if (string.IsNullOrWhiteSpace(url))
+    //             throw new InvalidOperationException("Missing config value: chathub");
+
+    //         if (!Uri.TryCreate(url, UriKind.Absolute, out var result))
+    //             throw new UriFormatException($"Invalid hub URI: {url}");
+
+    //         return result;
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Log?.LogError(ex, "Failed to build SignalR Hub URI from config.");
+    //         return new Uri("https://localhost:5001/chathub");
+    //     }
+    // }
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+            //await LoadAsync().ConfigureAwait(false);
+            //await SetupSignalR().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnInitializedAsync {ex.ToString()}");
+            Notifier.ShowError("SendMessageGlobalToasts", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+
+    }
+    private async Task SetupSignalR()
+    {
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(GetSafeHubUri())
+            .AddJsonProtocol(configure=>
+            {
+                configure.PayloadSerializerOptions = new()
+                {
+                    ReferenceHandler = ReferenceHandler.Preserve,
+                    PropertyNameCaseInsensitive = true,
+                    WriteIndented = true,
+                    PropertyNamingPolicy = null,
+                    IgnoreReadOnlyFields = false,
+                    IgnoreReadOnlyProperties = false,
+                    IncludeFields = false,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                    AllowTrailingCommas = true,
+                    NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString
+
+
+                };
+            })
+            //.AddMessagePackProtocol()
+            .WithAutomaticReconnect()
+            .Build(); //   ./* AddMessagePackProtocol ()*/
+        _hubConnection.KeepAliveInterval = TimeSpan.FromSeconds(120);
+        _hubConnection.ConfigureAwait(false);
+        _hubConnection.HandshakeTimeout = TimeSpan.FromSeconds(30);
+        _hubConnection.Reconnecting += async (error) =>
+        {
+
+            try
+            {
+                Log.LogWarning("SignalR disconnected, attempting to reconnect...");
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.LogError(ex, $"Reconnecting failed {ex.ToString()}");
+            }
+        };
+        _hubConnection.Reconnected += async (error) =>
+          {
+
+              try
+              {
+                  Log.LogWarning("SignalR reconnected");
+                  await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+              }
+              catch (Exception ex)
+              {
+                  Log.LogError(ex, $"Reconnected failed {ex.ToString()}");
+              }
+          };
+
+        // _hubConnection.Closed += async (error) =>
+        // {
+        //     Log.LogWarning("SignalR closed, attempting to reconnect...");
+        //     await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+        //     await Task.Delay(Random.Shared.Next(0, 5) * 1000).ConfigureAwait(false); // jitter delay
+        //     try
+        //     {
+        //         if (_hubConnection.State == HubConnectionState.Disconnected)
+        //             await _hubConnection.StartAsync().ConfigureAwait(false);
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         Log.LogError(ex, "Reconnect failed");
+        //     }
+        // };
+        _hubConnection.Closed += async (error) =>
+        {
+            Log.LogWarning("SignalR closed, attempting to reconnect...");
+            // Prevent reconnection if the hub has already been disposed
+            if (_disposed)
+            {
+                Log.LogInformation("HubConnection was disposed. Skipping reconnect.");
+                return;
+            }
+            await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+            await Task.Delay(Random.Shared.Next(0, 5) * 1000).ConfigureAwait(false); // jitter delay
+
+            try
+            {
+                if (_hubConnection.State == HubConnectionState.Disconnected)
+                    await _hubConnection.StartAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.LogError(ex, $"Reconnect failed {ex.ToString()}");
+            }
+        };
+
+        _hubConnection.On<TelegramMessage>("ReceiveTelegramMessage", async (message) =>
+        {
+            try
+            {
+                await InvokeAsync(() =>
+                  {
+                      if (!TelegramMessages.Any(m => m.Message_ID == message.Message_ID))
+                      {
+                          TelegramMessages.Add(message);
+                      }
+
+                  }).ConfigureAwait(false);
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                if (AutoScollEnable)
+                {
+                    await ScrollToButtom().ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.LogError(ex, $"ReceiveTelegramMessage async failed for{ex.ToString()} {message.ToString()}.");
+            }
+        });
+
+        try
+        {
+            if (_hubConnection.State == HubConnectionState.Disconnected)
+            {
+                await _hubConnection.StartAsync().ConfigureAwait(false);
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+            }
+            Log.LogInformation("Connected to SignalR ChatHub");
+        }
+        catch(TaskCanceledException ex)
+        {
+            //Ignore
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"SignalR connection failed. {ex.ToString()}");
+        }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+
+            if (firstRender)
+            {
+                try
+                {
+                    PanelVisible = true;
+                    await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                    await LoadAsync().ConfigureAwait(true);
+                    await SetupSignalR().ConfigureAwait(false);
+                    await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                    await ScrollToButtom().ConfigureAwait(false);
+                }
+                catch (JSDisconnectedException)
+                {
+                }
+                catch (OperationCanceledException)
+                { /* ignored – user navigated */
+                }
+                catch (Exception ex)
+                {
+                    Log.LogError(ex, $"OnAfterRenderAsync failed {ex.ToString()}");
+                    Notifier.ShowError("SendMessageGlobalToasts", ex.Message, "OnAfterRenderAsync error");
+                }
+            }
+            if(AutoScollEnable)
+            {
+                await ScrollToButtom().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            PanelVisible = false;
+            // await JS.InvokeVoidAsync("scrollChatToBottom", "chat-window").ConfigureAwait(false);
+            //  await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+        }
+
+    }
+
+    async Task ScrollToButtom()
+    {
+        await JS.InvokeVoidAsync("scrollChatToBottom", "chat-window").ConfigureAwait(false);
+        await JS.InvokeVoidAsync("scrollChatToBottom", "chat-container").ConfigureAwait(false);
+        await JS.InvokeVoidAsync("scrollChatToBottom", "current-main-window").ConfigureAwait(false); 
+        await JS.InvokeVoidAsync("scrollChatToBottom", "editor-container-row").ConfigureAwait(false); // id="main-window-drawer-content"
+        await JS.InvokeVoidAsync("scrollChatToBottom", "main-window-drawer").ConfigureAwait(false);
+        await JS.InvokeVoidAsync("scrollWindowToBottom").ConfigureAwait(false);
+    }
+    async Task LoadAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+            {
+                var mentionData = await WebApi.GetAllAsync<TelegramUser>(cts.Token).ConfigureAwait(false);
+                if (mentionData != null)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await TelegramUsersData.SyncWith(mentionData, User => User.UserId, configuredTaskAwaitableToInformUpdates: InvokeAsync(StateHasChanged).ConfigureAwait(false)).ConfigureAwait(false);
+                    }).ConfigureAwait(false);
+                }
+            }
+            using (var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+            {
+                var messagesData = await WebApi.GetAllAsync<TelegramMessage>(additionalQuery: $"$expand=Chat,From&$select=Message_ID,Chat,From,Text,Date&$orderby=Date asc").ConfigureAwait(false);
+
+                if (messagesData != null)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await TelegramMessages.SyncWith(
+                        messagesData.Where(m => m.Message_ID.HasValue), m => m.Message_ID!.Value, configuredTaskAwaitableToInformUpdates: InvokeAsync(StateHasChanged).ConfigureAwait(false)).ConfigureAwait(false);
+                    }).ConfigureAwait(false);
+                }
+                if(messagesData!=null && messagesData.Count()>0)
+                {
+                    var missingId = messagesData.Where(m => !m.Message_ID.HasValue).ToList();
+                    if (missingId.Any())
+                        Log.LogWarning($"Messages with missing ID: {missingId.Count}");
+                }
+            }
+
+            await UpdateChatFullInfos().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (HttpRequestException ex)
+        {
+            Log.LogError(ex, $"Error in LoadAsync HTTPRequestexception: {ex.ToString()}");
+            if (ex.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+            {
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"GetMyUserAsync failed {ex.ToString()}");
+            Notifier.ShowError("SendMessageGlobalToasts", ex.Message, "LoadAsync error");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+    private async Task UpdateChatFullInfos()
+    {
+        try
+        {
+            List<long> chatIds = TelegramMessages
+             .Select(m => m.Chat?.ChatId)
+             .Where(id => id != null && id.HasValue )
+             .Distinct()
+             .Select(x => x.Value)
+             .ToList();
+            // foreach(var chatti in chatIds.Where(x => x.HasValue && TelegramChatsToIgnore.Any(y => y.Chat.ChatId == x.Value)))
+
+
+            ObservableCollection<ChatFullInfo> tmpChatFullInfoCollection = new();
+            foreach (var chat in chatIds)
+            {
+                try
+                {
+                    ArgumentNullException.ThrowIfNull(chat);
+                    using (var savingFullInfoCts = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+                    {
+
+                        var chatFull = await telegramBot.GetChat(chat, savingFullInfoCts.Token).ConfigureAwait(false);
+                        ArgumentNullException.ThrowIfNull(chatFull);
+                        tmpChatFullInfoCollection.Add(chatFull);
+                        await tacosApi.NewFullChatInfo(chatFull, savingFullInfoCts.Token).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.LogWarning(ex, $"Chat not found put it to ignore...: {ex.ToString()}");
+
+
+
+                    try
+                    {
+                        using (var cts4 = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+                        {
+                            var responseForChat = await WebApi.GetAllAsync<TelegramChat>(cts4.Token, additionalQuery: $"$filter=ChatId eq {chat}").ConfigureAwait(false);
+                            if (responseForChat != null && responseForChat.Count() > 0 && responseForChat is TelegramChat telegramChat)
+                            {
+                                var updatedChat = new
+                                {
+                                    ID = telegramChat.ID,
+                                    ChatToIgnore = true
+                                };
+                                await WebApi.PatchPartialAsync<TelegramChat, object>(updatedChat, cts4.Token).ConfigureAwait(false);
+                            }
+                        }
+                    }
+                catch (Exception ex2)
+                    {
+                        /*var updatedUser = new
+                    {
+                        ID = tmpApplicationUser.ID,
+                        Email = tmpApplicationUser.Email,
+                        LockoutEnd = tmpApplicationUser.LockoutEnd,
+                        IsActive = tmpApplicationUser.IsActive,
+                        ChangePasswordOnFirstLogon = tmpApplicationUser.ChangePasswordOnFirstLogon,
+                        UserName = tmpApplicationUser.UserName,
+                        AccessFailedCount = tmpApplicationUser.AccessFailedCount,
+                        Roles = CurrentTacoPermissionPolicyRoles.Select(newy => new { ID = newy.ID, Name = newy.Name }),
+                        StoredPassword = tmpApplicationUser.StoredPassword
+                    };
+                    // PatchPartialAsync
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+                    {
+                        success = await Http.PatchPartialAsync<ApplicationUser, object>(updatedUser, Logger, cts.Token).ConfigureAwait(false);
+
+                    }*/
+                        Log.LogError(ex2, $"Set Chat to Ignore didn't work and failed {ex2.ToString()}");
+                    }
+                    // try
+                    // {
+                    //     using (var cts4 = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+                    //     {
+
+                    //         var responseForChat = await WebApi.GetAllAsync<TelegramChat>(cts4.Token, additionalQuery: $"$filter=ChatId eq {chat}").ConfigureAwait(false);
+                    //         if (responseForChat != null && responseForChat.Count() > 0 && responseForChat is TelegramChat telegramChat)
+                    //         {
+                    //             try
+                    //             {
+                    //                 var response = await WebApi.PostRefAsync<TelegramChatToIgnore, TelegramChat>(telegramChat, cts4.Token).ConfigureAwait(false);
+                    //                 if (response != null)
+                    //                 {
+                    //                     Log.LogInformation($"added {chat} to ChatsToIgnore");
+                    //                 }
+                    //                 else
+                    //                     Log.LogWarning($"Could not add {chat} to ChatsToIgnore");
+                    //             }
+                    //             catch (Exception ex2)
+                    //             {
+                    //                 Log.LogError(ex2, $"Failed to add {chat} to ChatsToIgnore {ex2.ToString()}");
+                    //             }
+
+                    //         }
+                    //     }
+                    // }
+                    // catch (Exception innerEx)
+                    // {
+                    //     Log.LogError(innerEx, $"Failed to ignore Chat life is hard...: {innerEx.ToString()}");
+                    // }
+                }
+            }
+            await InvokeAsync(async () =>
+            {
+                await TelegramChatFullInfos.SyncWith(tmpChatFullInfoCollection, Chati => Chati.Id, configuredTaskAwaitableToInformUpdates: InvokeAsync(StateHasChanged).ConfigureAwait(false)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"UpdateChatFullInfos failed {ex.ToString()}");
+            Notifier.ShowError("SendMessageGlobalToasts", ex.Message, "UpdateChatFullInfos error");
+        }
+    }
+
+    private async Task OnClick()
+    {
+        try
+        {
+            await UpdateChatFullInfos().ConfigureAwait(false);
+
+            string sanitizedMarkup = markup.Replace("<p>", "").Replace("</p>", "").Replace("<br>", "").Replace("<br />", "");
+            List<string> chatResults = new();
+            foreach (var chat in TelegramChatFullInfos)
+            {
+                try
+                {
+                    await Task.Delay(25).ConfigureAwait(false);
+                    using(var cts = new CancellationTokenSource(10000))
+                    {
+                        await telegramBot.SendMessage(chat.Id, sanitizedMarkup, ParseMode.Html,cancellationToken: cts.Token).ConfigureAwait(false);
+                        chatResults.Add($"Send Message To: {chat.ToString()}");
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                    Log.LogWarning(ex, $"Error in Onclick while sending message {ex.ToString()}");
+                }
+
+            }
+            StringBuilder stringBuilder = new();
+            foreach (var stringi in chatResults)
+                stringBuilder.AppendLine(stringi);
+
+            ArgumentNullException.ThrowIfNullOrWhiteSpace(stringBuilder.ToString());
+            Notifier.ShowRegular("SendMessageGlobalToasts", stringBuilder.ToString(), "Result of Send Message Action");
+            PanelVisible = true;
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnInitializedAsync {ex.ToString()}");
+            Notifier.ShowError("SendMessageGlobalToasts", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+    void OnMarkupChanged(string newValue)
+    {
+        markup = newValue;
+    }
+
+  
+    void OnCustomizeToolbar(IToolbar toolbar)
+    {
+        try
+        {
+            IBarGroup insertElementGroup = toolbar.Groups[HtmlEditorToolbarGroupNames.InsertElement];
+            IBarGroup fontElementGroup = toolbar.Groups[HtmlEditorToolbarGroupNames.Font];
+            IBarGroup sortElementGroup = toolbar.Groups[HtmlEditorToolbarGroupNames.Paragraph];
+            IBarGroup tableElementGroup = toolbar.Groups[HtmlEditorToolbarGroupNames.Table];
+            // Removes the first item
+            // insertElementGroup.Items.Remove(0);
+            // Removes the "Insert Code Block" item
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.ShowInsertTableDialog);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.DeleteTable);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.DeleteTableColumn);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.DeleteTableRow);
+
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.InsertTableColumnToTheLeft);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.InsertTableColumnToTheRight);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.InsertTableHeaderRow);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.InsertTableRowAbove);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.InsertTableRowBelow);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.HighlightText);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.ShowInsertPictureDialog);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.FontColor);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.BulletList);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.FontSize);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.FontName);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.NumberedList);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.FontSubscript);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.FontSuperscript);
+            sortElementGroup.Items.Clear();
+            tableElementGroup.Items.Clear();
+            // Removes all items
+            // insertElementGroup.Items.Clear();
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnCustomieToolbar {ex.ToString()}");
+        }
+    }
+}

@@ -1,0 +1,62 @@
+﻿html, body {
+    height: 100%;
+    margin: 0;
+}
+
+body > div, .main-layout-wrapper, .main, .page {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+#chat-container {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    height: calc(100vh - 480px); /* or whatever height fits your layout minus header/nav */
+    overflow: auto;
+}
+
+#chat-window {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    align-items: stretch;
+    background-color: #f7f7f7;
+    padding-bottom: 1rem;
+}
+
+.message {
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    margin-right: 1rem;
+    margin-left: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.button-container {
+    display: flex;
+    align-items: stretch;
+}
+
+#editor-container {
+    flex-shrink: 0;
+    padding: 0.5rem;
+    /*position: sticky;*/
+    /*bottom: 0;*/
+    border-top: 1px solid #ccc;
+}
+
+.editor-button-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+/*.editor-area {
+    flex-grow: 1;
+}*/
+
+.chat-button {
+    min-width: 100px;
+}

@@ -1,0 +1,213 @@
+﻿@using TacosCore.BusinessObjects.DataTypes.TelegramTypes
+@using global::Telegram.Bot
+@using global::Telegram.Bot.Types
+@inject ITelegramBotClient telegramBot
+@inject ILogger<UserDetail> Log
+@inject INotificationService Notifier
+@rendermode InteractiveServer
+<ToastWrapper Name="@toastName" ThemeMode="@ToastThemeMode.Dark" />
+<style>
+    .auto-size-item {
+        flex: 0 0 auto; /* prevents stretching */
+        align-self: flex-start; /* override align if needed */
+    }
+</style>
+<AuthorizeView Roles="Administrators,TelegramAdmin">
+    <Authorized>
+        <DxStackLayout Orientation="@currentOrientation">
+            <Items>
+                <DxStackLayoutItem CssClass="auto-size-item" Length="auto">
+                    <Template>
+                            <div>Commands</div>
+                            <DxButtonGroup RenderStyle="ButtonRenderStyle.Secondary" SelectionMode="ButtonGroupSelectionMode.Single">
+                                <Items>
+                                <DxButtonGroupItem Text="Ban User" Click="@(async () => await KickUser())"></DxButtonGroupItem>
+                                </Items>
+                            </DxButtonGroup>
+
+                    </Template>
+                </DxStackLayoutItem>
+                <DxStackLayoutItem CssClass="auto-size-item" Length="auto">
+                    <Template>
+                        <label for="deTimeSection" class="demo-text cw-320 mb-1">
+                            Date till when (for whatever command)
+                        </label>
+                        <DxDateEdit @bind-Date="@DateTimeValue"
+                                    TimeSectionVisible="true"
+                                    CssClass="cw-320"
+                                    InputId="deTimeSection" />
+                        <p class="demo-text cw-320 mt-3">
+                            Selected date: <b>@DateTimeValue.ToString("dddd, MMMM dd, yyyy HH:mm:ss")</b>
+                        </p>
+                        <div class="card">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item">
+                                    <DxCheckBox CheckType="CheckType.Switch"
+                                                LabelPosition="LabelPosition.Left"
+                                                @bind-Checked="@DeleteAllMessages"
+                                                Alignment="CheckBoxContentAlignment.SpaceBetween">
+                                        Delete All Messages
+                                    </DxCheckBox>
+                                </li>
+                            </ul>
+                        </div>
+                    </Template>
+                </DxStackLayoutItem>
+                <DxStackLayoutItem CssClass="auto-size-item" Length="auto">
+                    <Template>
+                        @if(chatMember!=null)
+                        {
+                            
+                        }
+                    </Template>
+                </DxStackLayoutItem>
+            </Items>
+        </DxStackLayout>
+    </Authorized>
+    <NotAuthorized>
+        <LoginDisplay />
+    </NotAuthorized>
+</AuthorizeView>
+
+
+
+@code {
+    [Parameter]
+    public TelegramChatFullInfo ChatFullInfo { get; set; } = null!;
+    [Parameter]
+    public TelegramUser User { get; set; } = null!;
+    [Parameter]
+    public Orientation currentOrientation { get; set; } = Orientation.Vertical;
+    DateTime DateTimeValue { get; set; } = DateTime.Now;
+    private ChatId chatId { get; set; }
+    private ChatMember? chatMember { get; set; }
+    private ChatAdministratorRights chatAdministratorRights { get; set; } = new();
+    private TelegramChatAdministratorRights telegramChatAdministratorRights { get; set; } = new();
+    string toastName = "UserDetailToasts";
+    bool DeleteAllMessages { get; set; } = false;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            long? tgChatId = ChatFullInfo.Chat?.ChatId;
+            if(tgChatId!=null)
+                chatId = new(tgChatId.Value);
+            await LoadDataAsync();
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnInitializedAsync {ex.ToString()}");
+            Notifier.ShowError(toastName, $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+        }
+
+    }
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            var userRights = await telegramBot.GetChatMember(chatId, User.UserId);
+            // var type = userRights.GetType();
+            // switch (type)
+            // {
+            //     case ChatMemberAdministrator
+            // }
+            switch(userRights)
+            {
+                case ChatMemberAdministrator administrator:
+                    Log.LogInformation($"ChatMemberAdministrator: {administrator.ToString()}");
+                    telegramChatAdministratorRights = new()
+                    {
+                        CanChangeInfo = administrator.CanChangeInfo,
+                        CanDeleteMessages = administrator.CanDeleteMessages,
+                        CanDeleteStories = administrator.CanDeleteStories,
+                        CanEditMessages = administrator.CanEditMessages,
+                        CanEditStories = administrator.CanEditStories,
+                        CanInviteUsers = administrator.CanInviteUsers,
+                        CanManageChat = administrator.CanManageChat,
+                        CanManageTopics = administrator.CanManageTopics,
+                        CanManageVideoChats = administrator.CanManageVideoChats,
+                        CanPinMessages = administrator.CanPinMessages,
+                        CanPostMessages = administrator.CanPostMessages,
+                        CanPostStories = administrator.CanPostStories,
+                        CanPromoteMembers = administrator.CanPromoteMembers,
+                        CanRestrictMembers = administrator.CanRestrictMembers,
+                        IsAnonymous = administrator.IsAnonymous
+                    };
+                    chatMember = administrator;
+                    break;
+                case ChatMemberOwner owner:
+                    Log.LogInformation($"ChatMemberOwner: {owner.ToString()}");
+                    chatMember = owner;
+                    break;
+                case ChatMemberMember member:
+                    Log.LogInformation($"ChatMemberMember: {member.ToString()}");
+                    chatMember = member;
+                    break;
+                case ChatMemberRestricted restrictedMember:
+                    
+                    Log.LogInformation($"ChatMemberRestricted: {restrictedMember.ToString()}");
+                    telegramChatAdministratorRights = new()
+                    {
+                        CanChangeInfo = restrictedMember.CanChangeInfo,
+                        CanDeleteMessages = false,
+                        CanDeleteStories = false,
+                        CanEditMessages = false,
+                        CanEditStories = false,
+                        CanInviteUsers = restrictedMember.CanInviteUsers,
+                        CanManageChat = false,
+                        CanManageTopics = restrictedMember.CanManageTopics,
+                        CanManageVideoChats = false,
+                        CanPinMessages = restrictedMember.CanPinMessages,
+                        CanPostMessages = false,
+                        CanPostStories = false,
+                        CanPromoteMembers = false,
+                        CanRestrictMembers = false,
+                        IsAnonymous = false
+                    };
+                    chatMember = restrictedMember;
+                    break;
+                case ChatMemberLeft memberLeft:
+                
+                    Log.LogInformation($"ChatMemberLeft: {memberLeft.ToString()}");
+                    chatMember = memberLeft;
+                    break;
+                case ChatMemberBanned memberBanned:
+                Log.LogInformation($"ChatMemberBanned: {memberBanned.ToString()}");
+                    chatMember = memberBanned;
+                    break;
+                default:
+                    break;
+            }
+            // await (userRights switch
+            // {
+            //     { ChatMemberAdministrator: { } admin } => () => { }
+
+            
+            
+            // });
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in LoadDataAsync {ex.ToString()}");
+            Notifier.ShowError(toastName, $"Exception: {ex.ToString()}", "Error in LoadDataAsync!");
+        }
+    }
+    private async Task KickUser()
+    {
+        try
+        {
+            await telegramBot.BanChatMember(chatId, User.UserId, DateTimeValue, DeleteAllMessages);
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in KickUser {ex.ToString()}");
+            Notifier.ShowError(toastName, $"Exception: {ex.ToString()}", "Error in KickUser!");
+        }
+    }
+}

@@ -1,0 +1,40 @@
+﻿@namespace TacosPortal.Components.Layout﻿﻿
+@rendermode InteractiveServer
+<div>
+    <ToastWrapper Name="LoginDisplayToasts" />
+    <DxMenu Orientation="@Orientation.Vertical" CssClass="menu menu-item" ItemsStretched="true" SizeMode="SizeMode.Large" Title="Navigation">
+        <Items>
+            <DxMenuItem NavigateUrl="/" Stretched="true" Text="Home"  CssClass="menu-item"  IconCssClass="icon home-icon"></DxMenuItem>
+ 
+            <AuthorizeView>
+                <NotAuthorized>
+                    <DxMenuItem NavigateUrl="/counter" Stretched="true" Text="Counter WASM" CssClass="menu-item" IconCssClass="icon counter-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/servercounter" Stretched="true" Text="Counter ServerInteractive" CssClass="menu-item" IconCssClass="icon counter-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/weather" Text="Weather ServerInteractive" CssClass="menu-item" IconCssClass="icon weather-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/login" Stretched="true" Text="Login WASM" CssClass="menu-item" IconCssClass="icon home-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/loginserver" Stretched="true" Text="Login ServerInteractive" CssClass="menu-item" IconCssClass="icon home-icon"></DxMenuItem>
+                </NotAuthorized>
+                <Authorized>
+                    <DxMenuItem NavigateUrl="/counter" Stretched="true" Text="Counter WASM" CssClass="menu-item" IconCssClass="icon counter-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/servercounter" Stretched="true" Text="Counter ServerInteractive" CssClass="menu-item" IconCssClass="icon counter-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/weather" Text="Weather ServerInteractive" CssClass="menu-item" IconCssClass="icon weather-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/login" Stretched="true" Text="Login WASM" CssClass="menu-item" IconCssClass="icon home-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/loginserver" Stretched="true" Text="Login ServerInteractive" CssClass="menu-item" IconCssClass="icon home-icon"></DxMenuItem>
+                </Authorized>
+            </AuthorizeView>
+
+            <AuthorizeView Roles="Administrators,TelegramAdmin">
+                <Authorized>
+                    <DxMenuItem NavigateUrl="/administration" Stretched="true" Text="Administration" CssClass="menu-item" IconCssClass="icon home-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/administrationwasm" Stretched="true" Text="Administration WASM" CssClass="menu-item" IconCssClass="icon home-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/claimsprincipaldata" Stretched="true" Text="AuthenticationState WASM Check" CssClass="menu-item" IconCssClass="icon home-icon"></DxMenuItem>
+
+                    <DxMenuItem NavigateUrl="/allChatsMessages" Stretched="true" Text="All Chat Messages" CssClass="menu-item" IconCssClass="icon home-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/telegramBotCommands" Stretched="true" Text="Telegram Bot Commands" CssClass="menu-item" IconCssClass="icon home-icon"></DxMenuItem>
+                    <DxMenuItem NavigateUrl="/teamadministration" Stretched="true" Text="Taco Team Administration" CssClass="menu-item" IconCssClass="icon home-icon"></DxMenuItem>
+                </Authorized>
+            </AuthorizeView>
+      
+        </Items>
+    </DxMenu>
+</div>

@@ -1,0 +1,81 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@namespace TacosPortal.Components.Layout
+@inject CustomRevalidatingAuthenticationStateProvider AuthProvider
+<div class="page">
+
+    <Drawer DrawerHeader="drawerHeader" DrawerFooter="drawerFooter">
+        <DrawerBody>
+            <div class="w-100">
+                <LoginIsland></LoginIsland>
+                <NavMenu>
+                </NavMenu>
+            </div>
+        </DrawerBody>
+        <DrawerTarget>
+    
+            <article id="current-main-window" class="p-4 full-height">
+                <div class="nav-buttons-container drawer-target">
+
+                    <NavLink href="@UrlGenerator.GetUrl(new Uri(NavigationManager.Uri).LocalPath, !ToggledSidebar)">
+                        <DxButton RenderStyle="@ButtonRenderStyle.Primary" RenderStyleMode="@ButtonRenderStyleMode.Text" CssClass="menu-button" IconCssClass="icon icon-menu"></DxButton>
+                    </NavLink>
+                    @if (new Uri(NavigationManager.Uri).LocalPath != "/")
+                    {
+                        <NavLink href="@UrlGenerator.GetUrl("/", ToggledSidebar)" class="button-link hidden">
+                            <DxButton RenderStyle="@ButtonRenderStyle.Primary" Text="Back to Home" CssClass="menu-button" RenderStyleMode="@ButtonRenderStyleMode.Text" IconCssClass="icon icon-backtohome"></DxButton>
+                        </NavLink>
+                    }
+                </div>
+                <ErrorBoundary @ref="_errorBoundary">
+                    <ChildContent>
+                        @Body
+                    </ChildContent>
+                    <ErrorContent Context="error">
+                        @LogAndRenderError(error)
+                    </ErrorContent>
+                </ErrorBoundary>
+            </article>
+        </DrawerTarget>
+    </Drawer>
+
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = UrlGenerator.ToggleSidebarName)]
+    public bool ToggledSidebar { get; set; }
+    private ErrorBoundary? _errorBoundary;
+    [Inject]
+    private ILogger<MainLayout>? Log { get; set; }
+
+    private void HandleLayoutError(Exception exception)
+    {
+        Log?.LogError(exception, "Unhandled exception in MainLayout.");
+    }
+    private RenderFragment drawerHeader => @<div class="navigation-drawer-header">
+        <img class="logo" src="images/TacosLogos.svg" alt="TacosPortal logo" />
+        <NavLink href="@UrlGenerator.GetUrl(new Uri(NavigationManager.Uri).LocalPath, !ToggledSidebar)">
+            <DxButton RenderStyle="@ButtonRenderStyle.Light" RenderStyleMode="@ButtonRenderStyleMode.Text" CssClass="menu-button-nav" IconCssClass="@(ToggledSidebar ? "icon icon-close" : "icon icon-menu")"></DxButton>
+        </NavLink>
+    </div>;
+
+    private RenderFragment drawerFooter => @<div>
+        <NavLink href="https://t.me/+XNonMkXvo0E3NWQy" class="button-link">
+            <DxButton Text="Telegram Group" RenderStyleMode="@ButtonRenderStyleMode.Text" CssClass="footer-button" RenderStyle="@ButtonRenderStyle.Light" IconCssClass="icon docs-icon"></DxButton>
+        </NavLink>
+    </div>
+    ;
+    private RenderFragment LogAndRenderError(Exception error) => builder =>
+    {
+        Log?.LogError(error, $"Unhandled exception in MainLayout. {error.ToString()}");
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "alert alert-danger");
+
+        builder.AddContent(2, "Something went wrong loading this page.");
+        builder.AddMarkupContent(3, "<br />");
+        builder.AddContent(4, error.Message);
+
+        builder.CloseElement();
+    };
+}

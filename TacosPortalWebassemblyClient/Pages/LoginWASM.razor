@@ -1,0 +1,317 @@
+﻿@page "/login"
+@using System.Web
+@using System.Text.Json.Serialization
+
+@rendermode InteractiveWebAssembly
+@inject NavigationManager NavigationManager
+@inject INotificationService Notifier
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+@inject IHttpClientFactory ClientFactory
+@implements IDisposable
+@inject ILogger<UserAdministrationWASM> Logger
+<div>
+        <DxLoadingPanel   CssClass="w-100" @bind-Visible="PanelVisible"  CloseOnClick="true"   IndicatorVisible="true"
+                IsContentBlocked="false"
+                IndicatorAreaVisible="false"
+                Text="Fetching Data...">
+         
+    <h3>Login WASM</h3>
+    <PageTitle>Independent Webassembly Login</PageTitle>
+    @if(!_isLoaded)
+    {
+        <p>Is still rendering on Webassembly side... give it some time....</p>
+    }
+        <ToastWrapperWASM Name="LoginToastsWasm" />
+    <EditForm Model="@LoginModel"
+    OnValidSubmit="@HandleValidSubmit"
+    OnInvalidSubmit="@HandleInvalidSubmit"
+    Context="EditFormContext"
+    FormName="LoginForm">
+
+        <DataAnnotationsValidator />
+        <DxFormLayout>
+            <DxFormLayoutItem Caption="Username" ColSpanMd="12">
+                    <DxTextBox Enabled=@_isLoaded @bind-Text="@LoginModel.userName" ClearButtonDisplayMode="DataEditorClearButtonDisplayMode.Auto"
+                ValidationEnabled="@EnableValidation"
+                ShowValidationIcon="@ShowValidationIcon"
+                ShowValidationSuccessState="@ShowValidationSuccessState" />
+            </DxFormLayoutItem>
+
+            <DxFormLayoutItem Caption="Password" ColSpanMd="12">
+                    <DxTextBox Enabled=@_isLoaded @bind-Text="@LoginModel.passWord" ClearButtonDisplayMode="DataEditorClearButtonDisplayMode.Auto"
+                Password="true"
+                ValidationEnabled="@EnableValidation"
+                ShowValidationIcon="@ShowValidationIcon"
+                ShowValidationSuccessState="@ShowValidationSuccessState" />
+            </DxFormLayoutItem>
+
+            <DxFormLayoutItem ColSpanMd="12">
+                    <DxButton Enabled=@_isLoaded Text="Log In"
+                SubmitFormOnClick="true"
+                RenderStyle="ButtonRenderStyle.Primary"
+                CssClass="w-100" />
+            </DxFormLayoutItem>
+            @if (EnableValidation)
+            {
+                <DxFormLayoutItem ColSpanMd="12">
+                    <ValidationSummary />
+                </DxFormLayoutItem>
+            }
+        </DxFormLayout>
+        @if (EnableValidation)
+        {
+            <div class="row w-100 mx-0">
+                <p class="demo-text col-12 mt-2">
+                    Login Validation State:
+                    <b>@FormValidationState</b>
+                </p>
+            </div>
+        }
+    </EditForm>
+    </DxLoadingPanel>
+</div>
+
+
+@code {
+    private HttpClient? Http = null!;
+    [Parameter]
+    public LoginPoco LoginModel { get; set; } = new();
+    bool PanelVisible { get; set; } = true;
+    bool EnableValidation { get; set; } = true;
+    bool ShowValidationIcon { get; set; } = true;
+    bool ShowValidationSuccessState { get; set; }
+    string FormValidationState = @"Press the ""Submit"" button to validate the form.";
+    private bool _hasUpdated = false;
+    private bool _isLoaded = false;
+    private bool _disposed;
+    public void Dispose()
+    {
+        try
+        {
+            if (!_disposed)
+            {
+                Logger.LogInformation("Executing Dispose");
+                Http?.Dispose();
+                _disposed = true;
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Logger.LogWarning(jsEx, "JSDisconnectedException in Dispose of LoginDisplay. This is expected if the user navigates away before the component is disposed.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in Dispose in LoginDisplay {ex.ToString()}");
+        }
+    }
+    private async Task OnValidSubmit()
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(Http);
+            PanelVisible = true;
+
+            var configRoot = Configuration.Get<TacosCore.BusinessObjects.ConfigurationRoot>();
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+            {
+                var response = await Http.LoginAsync(LoginModel.userName, LoginModel.passWord, Logger, cts.Token).ConfigureAwait(true);
+                if (response != null)
+                {
+                    if (response.IsSuccessStatusCode)
+                    {
+                        FormValidationState = "Login successful!";
+                        Logger.LogInformation($"Login successful Response StatusCode:{response.StatusCode} Content:{await response.Content.ReadAsStringAsync().ConfigureAwait(false)}");
+                        Notifier.ShowSuccess("LoginToastsWasm", $"Login successful redirect in 5 Seconds Response StatusCode:{response.StatusCode} Content:{await response.Content.ReadAsStringAsync().ConfigureAwait(false)}", "Welcome back!");
+                        // Redirect to the return URL or home page
+
+                        await Task.Delay(5000).ConfigureAwait(false) ;
+                        var returnUrl = HttpUtility.ParseQueryString(new Uri(NavigationManager.Uri).Query).Get("returnUrl") ?? "/";
+                        NavigationManager.NavigateTo(returnUrl, forceLoad: true);
+                    }
+                    else
+                    {
+                        FormValidationState = "Login failed. Please check your credentials.";
+                        Logger.LogWarning($"Login failed Response StatusCode:{response.StatusCode} Content:{await response.Content.ReadAsStringAsync().ConfigureAwait(false)}");
+                        Notifier.ShowWarning("LoginToastsWasm", $"Login failed Response StatusCode:{response.StatusCode} Content:{await response.Content.ReadAsStringAsync().ConfigureAwait(false)}", "Please check your credentials.");
+                    }
+                }
+                else
+                {
+                    Logger.LogError("Login response is null. Maybe Api Connection broken?");
+                    Notifier.ShowError("LoginToastsWasm", "Login failed. Response is null. Maybe Api Connection broken?", "Please check your credentials.");
+                }
+            }
+
+
+
+        }
+        catch(ArgumentNullException ex)
+        {
+            Notifier.ShowWarning("LoginToastsWasm", $"HttpClient not fully loaded yet maybe? {ex.ToString()}", "Error in OnValidSubmit!");
+        }
+        catch (Exception ex)
+        {
+            FormValidationState = $"Unexpected error: {ex.Message}";
+            Logger.LogError(ex, $"Error in OnValidSubmit {ex.ToString()}");
+            Notifier.ShowError("LoginToastsWasm",$"Exception: {ex.ToString()}", "Error in OnValidSubmit!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+
+            PanelVisible = true;
+
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in OnInitializedAsync {ex.ToString()}");
+            Notifier.ShowError("LoginToastsWasm", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+   
+            if (firstRender && !_hasUpdated)
+            {
+                PanelVisible = true;
+                if (_isLoaded == false)
+                {
+                    _isLoaded = true;
+                }
+                ClientFactory.CreateWASMClient(NavigationManager, Logger, out HttpClient? client);
+                if (client != null) Http = client;
+
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in OnAfterRenderAsync {ex.ToString()}");
+            Notifier.ShowError("LoginToastsWasm", $"Exception: {ex.ToString()}", "Error in OnAfterRender!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+
+    }
+    private JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions
+        {
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true,
+        PropertyNamingPolicy = null,
+        IgnoreReadOnlyFields = false,
+        IgnoreReadOnlyProperties = false,
+        IncludeFields = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        AllowTrailingCommas = true,
+        Converters = {
+        new JsonStringEnumConverter()
+    },
+        NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString
+
+        };
+
+    private async Task CallApiDirectly()
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(Http);
+            PanelVisible = true;
+
+            string Password = string.IsNullOrWhiteSpace(LoginModel.passWord) ? string.Empty : LoginModel.passWord;
+
+            var myAnonymousObject = new { LoginModel.userName, Password };
+            var json = JsonSerializer.Serialize(myAnonymousObject, jsonSerializerOptions);
+            using (var request = new HttpRequestMessage(HttpMethod.Post, "Authentication/LoginAsync") { Content = new StringContent(json, Encoding.UTF8, "application/json") })
+            {
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+                {
+                    var response = await Http.PostAsJsonAsync("Authentication/LoginAsync", myAnonymousObject, cts.Token).ConfigureAwait(false);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var resultContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        Logger.LogInformation($"Login successful Response StatusCode:{response.StatusCode} Content:{resultContent}");
+                        Notifier.ShowSuccess("LoginToastsWasm", $"Login Data Valid: {resultContent}", "Login Data passed prevalidation Check!");
+                    }
+                    else
+                    {
+                        Logger.LogWarning($"Login failed Response StatusCode:{response.StatusCode} Content:{await response.Content.ReadAsStringAsync().ConfigureAwait(false)}");
+                        Notifier.ShowWarning("LoginToastsWasm", $"Login Data Valid: {response.ToJsonString()}", "Login Data passed prevalidation Check!");
+                    }
+                }
+              
+            }
+        }
+        catch (ArgumentNullException ex)
+        {
+            Notifier.ShowWarning("LoginToastsWasm", $"HttpClient not fully loaded yet maybe? {ex.ToString()}", "Error in OnValidSubmit!");
+            Logger.LogWarning(ex, $"ArgumentNullException in OnGridModelSavingAsync: HttpClient not fully loaded yet maybe? {ex.ToString()}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in CallApiDirectly {ex.ToString()}");
+            Notifier.ShowError("LoginToastsWasm", $"Exception: {ex.ToString()}", "Error in CallApiDirectly!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+    async Task HandleValidSubmit()
+    {
+        try
+        {
+            PanelVisible = true;
+            if (LoginModel.passWord == null) LoginModel.passWord = string.Empty;
+            FormValidationState = @"Form data is valid trying to login";
+            await OnValidSubmit().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            FormValidationState = $"Unexpected error HandleValidSubmit: {ex.ToString()}";
+            Notifier.ShowError("LoginToastsWasm",$"Exception: {ex.ToString()}", "Error in HandleValidSubmit!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+    void HandleInvalidSubmit()
+    {
+        try
+        {
+            PanelVisible = true;
+
+            Notifier.ShowWarning("LoginToastsWasm", $"Login Data invalid", "Error in HandleInvalidSubmit!");
+            FormValidationState = @"Form data is invalid, won't try you are still possibly in the Prerenderd Version and not in the actual WebAssembly Component";
+        }
+        catch (Exception ex)
+        {
+            FormValidationState = $"Unexpected error HandleInvalidSubmit:  {ex.ToString()}";
+            Notifier.ShowError("LoginToastsWasm",$"Exception: {ex.ToString()}", "Error in HandleInvalidSubmit!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+
+    }
+}

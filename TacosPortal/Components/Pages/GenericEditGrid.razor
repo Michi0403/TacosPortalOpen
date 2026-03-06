@@ -1,0 +1,291 @@
+﻿@typeparam TItem
+@attribute [CascadingTypeParameter(nameof(TItem))]
+@inject IWebAPI WebApi
+@using System.Reflection
+@using System.ComponentModel.DataAnnotations
+@using DevExpress.Blazor
+@inject INotificationService Notifier
+<ToastWrapper Name="GenericEditGridToasts" />
+<h3>BusinessObjects: @typeof(TItem)</h3>
+<DxGrid @ref="Grid"
+        Data="@Items"
+        KeyFieldNames="@KeyFieldNames"
+        ValidationEnabled="true"
+        EditMode="GridEditMode.EditCell"
+        EditModelSaving="Grid_EditModelSaving"
+        DataItemDeleting="Grid_DataItemDeleting"
+        AutoCollapseDetailRow="true"
+        PageSize="30"
+        ColumnResizeMode="GridColumnResizeMode.NextColumn"
+        TextWrapEnabled="false"
+        HighlightRowOnHover="true"
+        AllowColumnReorder="true"
+        AllowDragRows="true"
+        AllowedDropTarget="GridAllowedDropTarget.Internal"
+        AllowGroup="true"
+        AllowSort="true">
+
+        <Columns>
+        <DxGridCommandColumn />
+        @foreach (var prop in propertyInfos)
+        {
+            // Skip complex types
+            if (typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType))
+            {
+            @*     <DxGridDataColumn FieldName="@prop.Name"  DataRowEditorVisible=true  Caption="@GetDisplayName(prop)">
+                    <EditSettings>
+                        <DxComboBoxSettings Data="collectionInfoDictionary[prop.Name] "
+
+                        ClearButtonDisplayMode="DataEditorClearButtonDisplayMode.Auto" />
+                    </EditSettings>
+                </DxGridDataColumn> *@
+            }
+            else
+            {
+                      <DxGridDataColumn FieldName="@prop.Name"
+                      
+                Caption="@GetDisplayName(prop)"
+                DataRowEditorVisible=true />
+            }
+
+        }
+    </Columns>
+</DxGrid>
+@if(Items!=null && Items.Count()>0)
+{
+
+    <GenericDataEditor Item="@Items.First()" TItem="TItem" />
+}
+@ChildContent
+@code {
+    IGrid? Grid { get; set; }
+    [Parameter]
+    public IEnumerable<TItem> Items { get; set; } = Array.Empty<TItem>();
+    private IEnumerable<PropertyInfo> propertyInfos { get; set; } = Array.Empty<PropertyInfo>();
+    private IEnumerable<PropertyInfo> scalarInfos { get; set; } = Array.Empty<PropertyInfo>();
+    private IEnumerable<PropertyInfo> testInfos { get; set; } = Array.Empty<PropertyInfo>();
+    private Dictionary<string, IEnumerable<object>> collectionInfoDictionary { get; set; } = new();
+    private string[]? KeyFieldNames { get; set; }
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+    private object Value { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadData().ConfigureAwait(false);
+            KeyFieldNames = GetKeyFieldNames<TItem>();
+            if (Items != null && Items.Count() > 0)
+            {
+                var item = Items.FirstOrDefault();
+                if (item != null)
+                {
+
+                    propertyInfos = item.GetType().GetProperties().Where(filter => filter.PropertyType.IsClass == false);
+
+                    // foreach (var collectionType in propertyInfos.Where(x => typeof(System.Collections.IEnumerable).IsAssignableFrom(x.PropertyType)))
+                    // {
+                    //     var value = collectionType.GetValue(Items);
+                    //     if(value != null)
+                    //     {
+                    //         if (value is System.Collections.IEnumerable enumerable && !(value is string))
+                    //         {
+                    //             if (!collectionInfoDictionary.ContainsKey(collectionType.Name))
+                    //                 collectionInfoDictionary[collectionType.Name] = new List<object>();
+
+                    //                 foreach (var elem in enumerable)
+                    //                 {
+                    //                 collectionInfoDictionary.TryAdd(collectionType.Name, (IEnumerable<object>)elem);
+                    //                 }
+                                
+                    //         }
+                    //     }
+                    //     // ExtractCollectionsFromItem(collectionType.PropertyType);
+                    // }
+                    // scalarInfos = item.GetType().GetProperties().Where(filter => filter.PropertyType.IsClass); for detailrows interesting???
+                    // testInfos = item.GetType().GetProperties().Where(filter => filter.PropertyType.IsGenericType);
+
+                    //                 collectionInfos = propertyInfos
+                    // .Where(p => p.GetType() is IEnu&& p.PropertyType != typeof(string))
+                    // .ToArray();
+                }
+            }
+            else
+            {
+                Notifier.ShowError("GenericEditGridToasts", $"Items is null or empty", "Error in OnInitializedAsync!");
+            }
+
+            // StringBuilder stringBuilder = new();
+            // stringBuilder.AppendLine($"MessageType{typeof(TItem)}:{Environment.NewLine}Following Keyfields found {KeyFieldNamess.ToJsonString()}");
+            // foreach (var entry in typeof(TItem).GetProperties())
+            // {
+            //     stringBuilder.AppendLine($"Property:{entry.Name} PropertyType:{entry.PropertyType.ToString()} PropertyTypeIsClass:{entry.PropertyType.IsClass} CanWrite:{entry.CanWrite} CanWrite:{entry.CanRead}");
+            // }
+            // Notifier.ShowSuccess("GenericEditGridToasts", $"{stringBuilder.ToString()}", "Initialization");
+            await base.OnInitializedAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("GenericEditGridToasts", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        // DataSource = await NwindDataService.GetEmployeesEditableAsync();
+    }
+    // protected override void OnParametersSet()
+    // {
+    //     var type = typeof(TItem);
+    //     var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+    //     ScalarProperties = props
+    //         .Where(p => !p.PropertyType.IsClass || p.PropertyType == typeof(string))
+    //         .ToArray();
+
+    //     ComplexProperties = props
+    //         .Where(p => p.PropertyType.IsClass && p.PropertyType != typeof(string) && !typeof(System.Collections.IEnumerable).IsAssignableFrom(p.PropertyType))
+    //         .ToArray();
+
+    //     KeyFieldNames = props
+    //         .Where(p => p.GetCustomAttribute<KeyAttribute>() != null || p.Name.Equals("Id", StringComparison.OrdinalIgnoreCase))
+    //         .Select(p => p.Name)
+    //         .ToArray();
+    // }
+
+    // private async Task<IEnumerable<object>> GetListBoxValues()
+    // {
+    //     r
+    //     return default ?? new List<object>();
+    // }
+
+    private async Task<IEnumerable<TItem>> LoadData()
+    {
+        try
+        {
+            Items = await WebApi.GetAllAsync<TItem>().ConfigureAwait(false) ?? [];
+            return Items;
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("GenericEditGridToasts", $"Exception: {ex.ToString()}", "Error in LoadData!");
+            return new List<TItem>();
+        }
+
+    }
+
+    async Task UpdateDataAsync()
+    {
+        try
+        {
+            Items = await LoadData().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("GenericEditGridToasts", $"Exception: {ex.ToString()}", "Error in UpdateDataAsync!");
+        }
+    }
+    private async Task Grid_DataItemDeleting(GridDataItemDeletingEventArgs e)
+    {
+        try
+        {
+
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("GenericEditGridToasts", $"Exception: {ex.ToString()}", "Error in Grid_DataItemDeleting!");
+        }
+        // await WebApi.DeleteAsync(e.Data);
+        // await Refresh();
+    }
+    // void Grid_CustomizeEditModel(GridCustomizeEditModelEventArgs e)
+    // { DxGrid ->CustomizeEditModel="Grid_CustomizeEditModel"
+    //     if (e.IsNew)
+    //     {
+    //         var newEmployee = (EditableEmployee)e.EditModel;
+    //         newEmployee.FirstName = "John";
+    //         newEmployee.LastName = "Doe";
+    //     }
+    // }
+    async Task Grid_EditModelSaving(GridEditModelSavingEventArgs e)
+    {
+        try
+        {
+
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("GenericEditGridToasts", $"Exception: {ex.ToString()}", "Error in Grid_EditModelSaving!");
+        }
+        // var editableEmployee = (EditableEmployee)e.EditModel;
+        // if (e.IsNew)
+        //     await NwindDataService.InsertEmployeeAsync(editableEmployee);
+        // else
+        //     await NwindDataService.UpdateEmployeeAsync((EditableEmployee)e.DataItem, editableEmployee);
+        // await UpdateDataAsync();
+    }
+
+    private string[] GetKeyFieldNames<T>()
+    {
+        try
+        {
+            var keyProps = typeof(T).GetProperties()
+                .Where(p => p.GetCustomAttribute<KeyAttribute>() != null ||
+                            p.Name.Equals("Id", StringComparison.OrdinalIgnoreCase))
+                .Select(p => p.Name)
+                .ToArray();
+
+            return keyProps;
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("GenericEditGridToasts", $"Exception: {ex}", "Error in GetKeyFieldNames!");
+            return Array.Empty<string>();
+        }
+    } 
+
+    private string[] GetKeyFieldNames(Type typeToGetKeyFieldsFrom)
+    {
+        try
+        {
+            var keyProps = typeToGetKeyFieldsFrom.GetProperties()
+                .Where(p => p.GetCustomAttribute<KeyAttribute>() != null ||
+                            p.Name.Equals("Id", StringComparison.OrdinalIgnoreCase))
+                .Select(p => p.Name)
+                .ToArray();
+
+            return keyProps;
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("GenericEditGridToasts", $"Exception: {ex}", "Error in GetKeyFieldNames!");
+            return Array.Empty<string>();
+        }
+    }
+
+    private async Task Refresh()
+    {
+        try
+        {
+            Items = await WebApi.GetAllAsync<TItem>().ConfigureAwait(false) ?? [];
+            
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("GenericEditGridToasts", $"Exception: {ex.ToString()}", "Error in Grid_EditModelSaving!");
+        }
+
+    }
+
+    private string GetDisplayName(PropertyInfo prop)
+    {
+        try
+        {
+            var displayAttr = prop.GetCustomAttribute<DisplayAttribute>();
+            return displayAttr?.Name ?? prop.Name;
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("GenericEditGridToasts", $"Exception: {ex.ToString()}", "Error in Grid_EditModelSaving!");
+            return string.Empty;
+        }
+      
+    }
+}

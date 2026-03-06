@@ -1,0 +1,128 @@
+﻿@using TacosCore.BusinessObjects.DataTypes.TelegramTypes
+@using global::Telegram.Bot
+@using global::Telegram.Bot.Types
+@using global::Telegram.Bot.Types.Enums
+@inject ILogger<SendMessage> Log
+@inject INotificationService Notifier
+@inject ITelegramBotClient telegramBot
+@rendermode InteractiveServer
+<div>
+    <h3>Send Message</h3>
+    <AuthorizeView Roles="Administrators,TelegramAdmin">
+            <Authorized>
+            <ToastWrapper Name="SendMessageToasts" ThemeMode="@ToastThemeMode.Dark" />
+            <DxHtmlEditor 
+                          Height="100%"
+                          @ref="@htmlEditor"
+                          @bind-Markup="@markup"
+                          CustomizeToolbar="@OnCustomizeToolbar"
+                          BindMarkupMode="HtmlEditorBindMarkupMode.OnDelayedInput"
+                          InputDelay="100"
+                          IsValid="@isValid"
+                          MediaResizeEnabled="true"
+                          TableResizeEnabled="true"
+                          AllowSoftLineBreak="true"
+                          CssClass="editor-area">
+                <DxHtmlEditorMentions>
+                    <DxHtmlEditorMention Data="@TelegramUsersData"
+                                         DisplayFieldName="@nameof(TelegramUser.Username)"
+                                         SearchFieldNames="@SearchFieldNames" />
+                </DxHtmlEditorMentions>
+            </DxHtmlEditor>
+
+            <DxButton Text="Send"
+                      SizeMode="SizeMode.Large"
+                      Click="OnClick"
+                      CssClass="chat-button" />
+        </Authorized>
+        <NotAuthorized>
+            <LoginDisplay />
+        </NotAuthorized>
+    </AuthorizeView>
+   
+</div>
+
+
+@code {
+    DxHtmlEditor? htmlEditor { get; set; }
+    bool isValid { get; set; }
+    [Parameter]
+    public string markup { get; set; } = string.Empty;
+    [Parameter]
+    public ChatId ChatId { get; set; }
+    [Parameter]
+    public ObservableCollection<TelegramUser> TelegramUsersData { get; set; } = new();
+    private string[] SearchFieldNames { get; set; } = { nameof(TelegramUser.Username), nameof(TelegramUser.FirstName), nameof(TelegramUser.LastName) };
+    protected override void OnInitialized() {
+    }
+
+    private async Task OnClick()
+    {
+        try
+        {
+
+            string sanitizedMarkup = markup.Replace("<p>", "").Replace("</p>", "").Replace("<br>", "").Replace("<br />", "");
+            using (var cts = new CancellationTokenSource(10000))
+            {
+                await telegramBot.SendMessage(ChatId, sanitizedMarkup, ParseMode.Html, cancellationToken: cts.Token).ConfigureAwait(false);
+                Notifier.ShowSuccess("SendMessageToasts", $"Message: {sanitizedMarkup} sent", "Message send");
+            }
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnClick {ex.ToString()}");
+            Notifier.ShowError("SendMessageToasts", $"Exception: {ex.ToString()}", "Error in OnClick!");
+        }
+        finally
+        {
+        }
+    }
+
+    void OnCustomizeToolbar(IToolbar toolbar)
+    {
+        try
+        {
+            IBarGroup insertElementGroup = toolbar.Groups[HtmlEditorToolbarGroupNames.InsertElement];
+            IBarGroup fontElementGroup = toolbar.Groups[HtmlEditorToolbarGroupNames.Font];
+            IBarGroup sortElementGroup = toolbar.Groups[HtmlEditorToolbarGroupNames.Paragraph];
+            IBarGroup tableElementGroup = toolbar.Groups[HtmlEditorToolbarGroupNames.Table];
+            // Removes the first item
+            // insertElementGroup.Items.Remove(0);
+            // Removes the "Insert Code Block" item
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.ShowInsertTableDialog);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.DeleteTable);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.DeleteTableColumn);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.DeleteTableRow);
+
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.InsertTableColumnToTheLeft);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.InsertTableColumnToTheRight);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.InsertTableHeaderRow);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.InsertTableRowAbove);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.InsertTableRowBelow);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.HighlightText);
+            insertElementGroup.Items.Remove(HtmlEditorToolbarItemNames.ShowInsertPictureDialog);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.FontColor);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.BulletList);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.FontSize);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.FontName);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.NumberedList);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.FontSubscript);
+            fontElementGroup.Items.Remove(HtmlEditorToolbarItemNames.FontSuperscript);
+            sortElementGroup.Items.Clear();
+            tableElementGroup.Items.Clear();
+            // Removes all items
+            // insertElementGroup.Items.Clear();
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnCustomieToolbar {ex.ToString()}");
+        }
+    }
+    void OnMarkupChanged(string newValue)
+    {
+        markup = newValue;
+    }
+}

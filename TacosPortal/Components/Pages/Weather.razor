@@ -1,0 +1,45 @@
+﻿@page "/weather"
+@namespace TacosPortal.Components.Pages
+@inject WeatherForecastService ForecastService
+@inject INotificationService Notifier
+@rendermode @(new InteractiveServerRenderMode(prerender: true))
+<PageTitle>Weather ServerInteractive</PageTitle>
+<ToastWrapper Name="WeatherToast" />
+<h1>Weather ServerInteractive</h1>
+
+@if (forecasts == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <DxGrid Data="@forecasts"
+                CssClass="mw-1100">
+        <Columns>
+            <DxGridDataColumn Caption="Date" FieldName="Date" />
+            <DxGridDataColumn Caption="Temperature (C)" FieldName="TemperatureC" />
+            <DxGridDataColumn Caption="Temperature (F)" FieldName="TemperatureF" />
+            <DxGridDataColumn Caption="Summary" FieldName="Summary" />
+        </Columns>
+    </DxGrid>
+}
+
+@code {
+    private WeatherForecast[]? forecasts;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+
+            forecasts = await ForecastService.GetForecastAsync(DateOnly.FromDateTime(DateTime.Now)).ConfigureAwait(false);
+                await base.OnInitializedAsync();
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("WeatherToast", $"{ex.ToString()}", "Error in weather");
+        }
+    }
+}

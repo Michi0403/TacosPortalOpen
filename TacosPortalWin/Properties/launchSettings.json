@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "TacosPortalWin (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "TacosPortalWin (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

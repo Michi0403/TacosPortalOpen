@@ -1,0 +1,288 @@
+﻿@page "/loginserver"
+@using System.Text.Json.Serialization
+@using TacosCore.Extensions
+@inject NavigationManager NavigationManager
+@inject IWebAPI WebApi
+@inject HttpClient Http
+@inject CustomRevalidatingAuthenticationStateProvider AuthStateProvider
+@inject INotificationService Notifier
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+@inject ILogger<LoginServer> Log
+
+@rendermode @(new InteractiveServerRenderMode(prerender: true))
+<div>
+        <DxLoadingPanel   CssClass="w-100" @bind-Visible="PanelVisible"  CloseOnClick="true"   IndicatorVisible="true"
+                IsContentBlocked="false"
+                IndicatorAreaVisible="false"
+                Text="Fetching Data...">
+    <h3>Login ServerInteractive</h3>
+    <PageTitle>Login ServerInteractive</PageTitle>
+    <ToastWrapper Name="LoginToasts" />
+    <EditForm Model="@LoginModel"
+    OnValidSubmit="@HandleValidSubmit"
+    OnInvalidSubmit="@HandleInvalidSubmit"
+    Context="EditFormContext"
+    FormName="LoginForm">
+            @if (!_isLoaded)
+            {
+                <p>Is still rendering on ServerInteractive side... give it some time....</p>
+            }
+        <DataAnnotationsValidator />
+        <DxFormLayout>
+            <DxFormLayoutItem Caption="Username" ColSpanMd="12">
+                <DxTextBox @bind-Text="@LoginModel.userName" ClearButtonDisplayMode="DataEditorClearButtonDisplayMode.Auto"
+                ValidationEnabled="@EnableValidation"
+                ShowValidationIcon="@ShowValidationIcon"
+                ShowValidationSuccessState="@ShowValidationSuccessState" />
+            </DxFormLayoutItem>
+
+            <DxFormLayoutItem Caption="Password" ColSpanMd="12">
+                <DxTextBox @bind-Text="@LoginModel.passWord" ClearButtonDisplayMode="DataEditorClearButtonDisplayMode.Auto"
+                Password="true"
+                ValidationEnabled="@EnableValidation"
+                ShowValidationIcon="@ShowValidationIcon"
+                ShowValidationSuccessState="@ShowValidationSuccessState" />
+            </DxFormLayoutItem>
+
+            <DxFormLayoutItem ColSpanMd="12">
+                <DxButton Text="Log In"
+                SubmitFormOnClick="true"
+                RenderStyle="ButtonRenderStyle.Primary"
+                CssClass="w-100" />
+            </DxFormLayoutItem>
+            @if (EnableValidation)
+            {
+                <DxFormLayoutItem ColSpanMd="12">
+                    <ValidationSummary />
+                </DxFormLayoutItem>
+            }
+        </DxFormLayout>
+        @if (EnableValidation)
+        {
+            <div class="row w-100 mx-0">
+                <p class="demo-text col-12 mt-2">
+                    Login Validation State:
+                    <b>@FormValidationState</b>
+                </p>
+            </div>
+        }
+    </EditForm>
+
+    </DxLoadingPanel>
+</div>
+
+
+@code {
+    [Parameter]
+    public LoginPoco LoginModel { get; set; } = new();
+    bool EnableValidation { get; set; } = true;
+    bool ShowValidationIcon { get; set; } = true;
+    bool ShowValidationSuccessState { get; set; }
+    string FormValidationState = @"Press the ""Submit"" button to validate the form.";
+    private bool _isLoaded = false;
+    bool PanelVisible { get; set; } = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if(firstRender)
+            {
+                PanelVisible = true;
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+
+                if (_isLoaded == false)
+                {
+                    _isLoaded = true;
+                }
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnAfterRenderAsync {ex.ToString()}");
+            Notifier.ShowError("LoginToasts", $"Exception: {ex.ToString()}", "Error in OnAfterRender!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+
+    }
+    private async Task OnValidSubmit()
+    {
+        try
+        {
+
+            PanelVisible = true;
+            var configRoot = Configuration.Get<TacosCore.BusinessObjects.ConfigurationRoot>();
+            bool success = false;
+            ArgumentNullException.ThrowIfNull(configRoot);
+            var port = NavigationManager.BaseUri;
+            Uri? baseStringUriFromConfig = new Uri(port, UriKind.Absolute);
+            // ArgumentNullException.ThrowIfNull(configRoot.Kestrel);
+            // var baseStringUriFromConfig = configRoot.Kestrel.Endpoints.Http.Url;
+
+            if (baseStringUriFromConfig!=null)
+            {
+                Log.LogInformation("Trying to login via Javascript loginToSetCookie function with configRoot.ApiCore.JScriptURL from config");
+         
+                ArgumentNullException.ThrowIfNull(configRoot.ApiCore);
+                success = await JS.InvokeAsync<bool>("loginToSetCookie", $"{baseStringUriFromConfig}api/Authentication/LoginAsync", LoginModel.userName, LoginModel.passWord).ConfigureAwait(false);
+            }
+            else
+            {
+                Log.LogInformation("Not found right URL in Config configRoot.ApiCore.JScriptURL, fallback to httpClient and configRoot.Kestrel.Endpoints.Http.Url.Replace(0.0.0.0, localhost)");
+                var response = await WebApi.LoginAsync(LoginModel.userName, LoginModel.passWord).ConfigureAwait(false);
+                if(response!=null && response.IsSuccessStatusCode)
+                {
+                    success = true;
+                }
+                else
+                {
+                    success = false;
+                }
+            }
+            if (!success )
+            {
+                FormValidationState = "Login failed. Please check your credentials.";
+                Notifier.ShowWarning("LoginToasts", $"Login failed", "Please check your credentials or Server Connection.");
+                return;
+            }
+            else
+            {
+
+                Notifier.ShowSuccess("LoginToasts","Login successful redirect in 5 Seconds", "Welcome back!");
+                await Task.Delay(5000).ConfigureAwait(false) ;
+                var returnUrl = HttpUtility.ParseQueryString(new Uri(NavigationManager.Uri).Query).Get("returnUrl") ?? "/";
+                NavigationManager.NavigateTo(returnUrl, forceLoad: true);
+            }
+         
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnValidSubmit {ex.ToString()}");
+            FormValidationState = $"Unexpected error: {ex.Message}";
+            Notifier.ShowError("LoginToasts",$"Exception: {ex.ToString()}", "Error in OnValidSubmit!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+    private JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions
+        {
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true,
+        PropertyNamingPolicy = null,
+        IgnoreReadOnlyFields = false,
+        IgnoreReadOnlyProperties = false,
+        IncludeFields = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        AllowTrailingCommas = true,
+        Converters = {
+        new JsonStringEnumConverter() 
+    },
+        NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString
+
+        };
+
+    private async Task CallApiDirectly()
+    {
+        try
+        {
+
+            PanelVisible = true;
+            string Password = string.IsNullOrWhiteSpace(LoginModel.passWord) ? string.Empty : LoginModel.passWord;
+
+            var myAnonymousObject = new { LoginModel.userName, Password };
+            var json = JsonSerializer.Serialize(myAnonymousObject, jsonSerializerOptions);
+            using (var request = new HttpRequestMessage(HttpMethod.Post, "Authentication/LoginAsync") { Content = new StringContent(json, Encoding.UTF8, "application/json") })
+            {
+                request.Headers.ExpectContinue = false;
+                request.Headers.Add("Access-Control-Allow-Origin", "*");
+                request.Headers.Add("Access-Control-Allow-Credentials", "true");
+                request.Headers.Add("Access-Control-Allow-Headers", "Access-Control-Allow-Origin, Origin, X-Requested-With, Content-MessageType, Accept");
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                request.Headers.TryAddWithoutValidation("Content-MessageType", "application/json; odata.metadata=full");
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
+                request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip")); // optional compression
+                request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("br"));   // Brotli
+                request.Headers.TryAddWithoutValidation("Content-Type", "application/octet-stream");
+
+                var response = await Http.PostAsJsonAsync("Authentication/LoginAsync", myAnonymousObject).ConfigureAwait(false);
+                if (response.IsSuccessStatusCode)
+                {
+                    var resultContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    Notifier.ShowSuccess("LoginToasts", $"Login Data Valid: {resultContent}", "Login Data passed prevalidation Check!");
+                }
+                else
+                {
+                    Notifier.ShowWarning("LoginToasts", $"Login Data Valid: {response.ToJsonString()}", "Login Data passed prevalidation Check!");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in CallApiDirectly {ex.ToString()}");
+            Notifier.ShowError("LoginToasts", $"Exception: {ex.ToString()}", "Error in CallApiDirectly!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+       
+    }
+
+    async Task HandleValidSubmit()
+    {
+        try
+        {
+            PanelVisible = true;
+
+            if (LoginModel.passWord == null) LoginModel.passWord = string.Empty;
+            FormValidationState = @"Form data is valid trying to login";
+            await OnValidSubmit().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in HandleValidSubmit {ex.ToString()}");
+            Notifier.ShowError("LoginToasts",$"Exception: {ex.ToString()}", "Error in HandleValidSubmit!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+    void HandleInvalidSubmit()
+    {
+        try
+        {
+            PanelVisible = true;
+
+            Notifier.ShowWarning("LoginToasts", $"Login Data invalid", "Error in HandleInvalidSubmit!");
+            FormValidationState = @"Form data is invalid, won't try";
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in HandleInvalidSubmit {ex.ToString()}");
+            Notifier.ShowError("LoginToasts",$"Exception: {ex.ToString()}", "Error in HandleInvalidSubmit!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+}

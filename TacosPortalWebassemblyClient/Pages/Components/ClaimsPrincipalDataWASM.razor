@@ -1,0 +1,122 @@
+﻿@page "/claimsprincipaldata"
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
+@implements IDisposable
+@inject ILogger<UserAdministrationWASM> Logger
+@rendermode InteractiveWebAssembly
+<div>
+        <DxLoadingPanel   CssClass="w-100" @bind-Visible="PanelVisible"  CloseOnClick="true"   IndicatorVisible="true"
+                IsContentBlocked="false"
+                IndicatorAreaVisible="false"
+                Text="Fetching Data...">
+    <h5>Authentication WASM Check</h5>
+    <p>If you see here data that means that you login and auth flow worked right throw the offline webassembly sub component in your device</p>
+    <button @onclick="GetClaimsPrincipalData">Click to Get WASM ClaimsPrincipal Data</button>
+
+    <p>@authMessage</p>
+
+    @if (claims.Any())
+    {
+        <p>That means you are successfully authenticated in the authentication between your WASM Client and the Backend</p>
+        <ul>
+            @foreach (var claim in claims)
+            {
+                <li>@claim.Type: @claim.Value</li>
+            }
+        </ul>
+    }
+
+    <p>@surname</p>
+    </DxLoadingPanel>
+
+</div>
+
+@code {
+    public string? surname;
+    public IEnumerable<Claim> claims = Enumerable.Empty<Claim>();
+    public string authMessage = "The user is NOT authenticated.";
+    bool PanelVisible { get; set; } = false;
+    [CascadingParameter]
+    public Task<AuthenticationState>? authenticationState { get; set; }
+    private bool _disposed;
+    public void Dispose()
+    {
+        try
+        {
+            if (!_disposed)
+            {
+               
+                authenticationState?.Dispose();
+
+                Logger.LogInformation("Executing Dispose");
+                _disposed = true;
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Logger.LogWarning(jsEx, "JSDisconnectedException in Dispose of LoginDisplay. This is expected if the user navigates away before the component is disposed.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in Dispose in LoginDisplay {ex.ToString()}");
+        }
+    }
+    private async Task GetClaimsPrincipalData()
+    {
+        try
+        {
+            PanelVisible = true;
+
+            var authState = await AuthenticationStateProvider
+    .GetAuthenticationStateAsync().ConfigureAwait(false);
+            var user = authState.User;
+
+            if (user.Identity is not null && user.Identity.IsAuthenticated)
+            {
+                authMessage = $"{user.Identity.Name} is authenticated.";
+                claims = user.Claims;
+                surname = user.FindFirst(c => c.Type == ClaimTypes.Surname)?.Value;
+            }
+            else
+            {
+                authMessage = "The user is NOT authenticated.";
+            }
+            
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error retrieving ClaimsPrincipal data: {Message}", ex.Message);
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+
+            if (authenticationState is not null)
+            {
+                var authState = await authenticationState.ConfigureAwait(false);
+                var user = authState?.User;
+
+                if (user?.Identity is not null && user.Identity.IsAuthenticated)
+                {
+                    authMessage = $"{user.Identity.Name} is authenticated.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error during OnInitializedAsync: {Message}", ex.Message);
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+}

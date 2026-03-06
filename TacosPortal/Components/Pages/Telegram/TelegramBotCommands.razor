@@ -1,0 +1,283 @@
+﻿@inject IWebAPI WebApi
+@inject INotificationService Notifier
+@inject IJSRuntime JS
+@using DevExpress.Blazor.Office
+@using TacosCore.BusinessObjects.DataTypes.TelegramTypes
+@inject ILogger<TelegramBotCommands> Log
+@inject NavigationManager NavManager
+@using Microsoft.AspNetCore.SignalR.Client
+@using global::Telegram.Bot
+@inject ConfigurationRoot AppConfig
+@implements IDisposable
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+@page "/telegramBotCommands"
+<div>
+
+
+    <AuthorizeView Roles="Administrators,TelegramAdmin">
+            <Authorized>
+                <DxLoadingPanel CssClass="w-100" @bind-Visible="PanelVisible" CloseOnClick="true"
+                                IndicatorVisible="true"
+                                IsContentBlocked="false"
+                                IndicatorAreaVisible="false"
+                                Text="Fetching Data...">
+
+                    <ToastWrapper Name="TelegramBotCommandsToast" ThemeMode="@ToastThemeMode.Dark" />
+                    <PageTitle>Telegram Bot Commands</PageTitle>
+                    <h5>Telegram Rooms Known</h5>
+                        <DxGrid @ref="Grid" Data="Chats" AutoCollapseDetailRow="AutoCollapseDetailRow"
+                            ColumnResizeMode="GridColumnResizeMode.NextColumn" TextWrapEnabled="false" PageSize="15">
+                                <Columns>
+                                    <DxGridDataColumn FieldName="ID" SortIndex="0" />
+                                    <DxGridDataColumn FieldName="Chat.ChatId" />
+                                    <DxGridDataColumn FieldName="Chat.Type" />
+                                    <DxGridDataColumn FieldName="Chat.Title" />
+                                    <DxGridDataColumn FieldName="Chat.Username" />
+                                    <DxGridDataColumn FieldName="Chat.FirstName" />
+                                    <DxGridDataColumn FieldName="Chat.LastName" />
+                                    <DxGridDataColumn FieldName="Chat.IsForum" />
+                                    <DxGridDataColumn FieldName="Chat.IsForum" />
+                                    <DxGridDataColumn FieldName="DateCreated" />
+                                 </Columns>
+                        <DetailRowTemplate Context="rowContext">
+                            <ChatDetail ChatFullInfo="(TelegramChatFullInfo)rowContext.DataItem" />
+                                </DetailRowTemplate>
+                        <ToolbarTemplate Context="toolbarContext">
+                                    <DxToolbar ItemRenderStyleMode="ToolbarRenderStyleMode.Plain">
+                                        <Items>
+                                            <DxToolbarItem BeginGroup="true" Alignment="ToolbarItemAlignment.Left">
+                                                <Template Context="toolbar_item_context">
+                                                    <div class="d-flex flex-row align-items-center">
+                                                        <DxCheckBox @bind-Checked="AutoCollapseDetailRow">
+                                                            Auto Collapse Detail Rows
+                                                        </DxCheckBox>
+                                                    </div>
+                                                </Template>
+                                            </DxToolbarItem>
+                                        </Items>
+                                    </DxToolbar>
+                                </ToolbarTemplate>
+                         </DxGrid>
+                </DxLoadingPanel>
+
+            </Authorized>
+            <NotAuthorized>
+            <LoginDisplay />
+            </NotAuthorized>
+        </AuthorizeView>
+</div>
+@code 
+{
+    bool isValid { get; set; }
+    bool AutoCollapseDetailRow { get; set; }
+    bool PanelVisible { get; set; } = true;
+    IGrid? Grid { get; set; }
+    ObservableCollection<TelegramChatFullInfo> Chats { get; } = new();
+    private bool _disposed;
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        try
+        {
+            if (_disposed)
+                return;
+
+            if (disposing)
+            {
+                WebApi?.Dispose();
+                Log.LogInformation("Executing Dispose");
+                _disposed = true;
+            }
+
+            _disposed = true;
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in Dispose {ex.ToString()}");
+        }
+
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        try
+        {
+            // if (_hubConnection != null)
+            // {
+            //     if (_hubConnection.State != HubConnectionState.Disconnected)
+            //         await _hubConnection.StopAsync().ConfigureAwait(false);
+
+            //     await _hubConnection.DisposeAsync().ConfigureAwait(false);
+            //     _hubConnection = null;
+            // }
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Error in DisposeAsync");
+        }
+
+        Dispose(disposing: false);
+        GC.SuppressFinalize(this);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+            //await LoadAsync().ConfigureAwait(false);
+            // await SetupSignalR().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnInitializedAsync {ex.ToString()}");
+            Notifier.ShowError("TelegramBotCommandsToast", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+
+    }
+   
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+
+            if (firstRender)
+            {
+                try
+                {
+                    PanelVisible = true;
+                    await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                    await LoadAsync().ConfigureAwait(true);
+                  
+                    await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                }
+                catch (JSDisconnectedException)
+                {
+                }
+                catch (OperationCanceledException)
+                { /* ignored – user navigated */
+                }
+                catch (Exception ex)
+                {
+                    Log.LogError(ex, "OnAfterRenderAsync failed");
+                    Notifier.ShowError("TelegramBotCommandsToast", ex.Message, "OnAfterRenderAsync error");
+                }
+            }
+        }
+        finally
+        {
+            PanelVisible = false;
+            // await JS.InvokeVoidAsync("scrollChatToBottom", "chat-window").ConfigureAwait(false);
+            //  await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+        }
+
+    }
+
+    async Task LoadAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+            using (var ctsUser = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+            {
+                var data = await WebApi.GetAllAsync<TelegramChatFullInfo>(ctsUser.Token, additionalQuery: "$expand=Chat&$filter=Chat/ChatToIgnore eq false or Chat/ChatToIgnore eq null").ConfigureAwait(false);
+                if (data != null)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await Chats.SyncWith(
+                        data, m => m.Chat.ChatId, configuredTaskAwaitableToInformUpdates: InvokeAsync(StateHasChanged).ConfigureAwait(false)).ConfigureAwait(false);
+                    }).ConfigureAwait(false);
+                }
+
+                await base.OnInitializedAsync().ConfigureAwait(false);
+            }
+          
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (HttpRequestException ex)
+        {
+            Log.LogError(ex, $"Error in LoadAsync HTTPRequestexception: {ex.ToString()}");
+            if (ex.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+            {
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"GetMyUserAsync failed {ex.ToString()}");
+            Notifier.ShowError("TelegramBotCommandsToast", ex.Message, "LoadAsync error");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+    private async Task OnClick()
+    {
+        try
+        {
+            // await UpdateChatFullInfos().ConfigureAwait(false);
+
+            // string sanitizedMarkup = markup.Replace("<p>", "").Replace("</p>", "");
+            // List<string> chatResults = new();
+            // foreach (var chat in TelegramChatFullInfos)
+            // {
+            //     try
+            //     {
+            //         await Task.Delay(25).ConfigureAwait(false);
+            //         using(var cts = new CancellationTokenSource(10000))
+            //         {
+            //             await telegramBot.SendMessage(chat.Id, sanitizedMarkup, Telegram.Bot.Types.Enums.ParseMode.Html,cancellationToken: cts.Token).ConfigureAwait(false);
+            //             chatResults.Add($"Send Message To: {chat.ToString()}");
+            //         }
+
+            //     }
+            //     catch (Exception ex)
+            //     {
+            //         Log.LogWarning(ex, $"Error in Onclick while sending message {ex.ToString()}");
+            //     }
+
+            // }
+            // StringBuilder stringBuilder = new();
+            // foreach (var stringi in chatResults)
+            //     stringBuilder.AppendLine(stringi);
+
+            // ArgumentNullException.ThrowIfNullOrWhiteSpace(stringBuilder.ToString());
+            // Notifier.ShowRegular("TelegramBotCommandsToast", stringBuilder.ToString(), "Result of Send Message Action");
+            // PanelVisible = true;
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnInitializedAsync {ex.ToString()}");
+            Notifier.ShowError("TelegramBotCommandsToast", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+}

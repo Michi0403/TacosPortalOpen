@@ -1,0 +1,531 @@
+﻿@using TacosCore.BusinessObjects.DataTypes.PermissionBaseObjects
+@inject NavigationManager NavigationManager
+@inject INotificationService Notifier
+@inject IHttpClientFactory ClientFactory
+@inject IJSRuntime JS
+@implements IDisposable
+@inject ILogger<TeamAdministration> Logger
+@rendermode InteractiveWebAssembly
+@page "/teamadministration"
+<div>
+@*              <AuthorizeView Roles="Administrators,TelegramAdmin">
+        <Authorized>
+            </Authorized>
+            <NotAuthorized>
+                Not authorized
+            </NotAuthorized>
+            </AuthorizeView> *@
+
+        <DxLoadingPanel   CssClass="w-100" @bind-Visible="PanelVisible"  CloseOnClick="true"   IndicatorVisible="true"
+                IsContentBlocked="false"
+                    IndicatorAreaVisible="false"
+                Text="Fetching Data...">
+        <AuthorizeView>
+            @* Roles="Administrators,TelegramAdmin" *@
+            <Authorized Context="AuthorizedContext" >
+
+            <h5>Team Administration</h5>
+            <ToastWrapperWASM Name="TeamAdministrationToasts" />
+
+            <DxGrid @ref="Grid"
+            AllowSelectRowByClick="true"
+            Data="DataSource"
+            KeyFieldName="ID"
+            ValidationEnabled="false"
+            EditMode="@CurrentEditMode"
+            EditStart="OnGridEditStart"
+            ColumnResizeMode="GridColumnResizeMode.NextColumn"
+            TextWrapEnabled="false"
+            ShowAllRows="true"
+            HighlightRowOnHover="true" EditorRenderMode="GridEditorRenderMode.Integrated"
+            SelectionMode="@GridSelectionMode.Single"
+            EditModelSaving="OnGridModelSavingAsync"
+            DataItemDeleting="OnGridModelDeleteAsync"
+            CustomizeEditModel="Grid_CustomizeEditModel"
+                        AutoCollapseDetailRow="AutoCollapseDetailRow">
+
+            <Columns>
+                <DxGridCommandColumn />
+                <DxGridDataColumn FieldName="ID" />
+                <DxGridDataColumn FieldName="Name" />
+                <DxGridDataColumn FieldName="TeamChats" />
+                <DxGridDataColumn FieldName="RolesBelongToThisTeam" />
+                <DxGridDataColumn FieldName="TeamAdminChat" />
+            </Columns>
+            <EditFormTemplate Context="EditFormContext">
+                @{
+                    var user = (TacoTeam)EditFormContext.EditModel;
+                }
+                <DxFormLayout  SizeMode="SizeMode.Large">
+
+                    <DxFormLayoutItem  Caption="ID:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(TacoTeam.ID))
+                    </DxFormLayoutItem>
+                    <DxFormLayoutItem Caption="Team Name:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(TacoTeam.Name))
+                    </DxFormLayoutItem>
+                            <DxFormLayoutItem Caption="TeamChats:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(TacoTeam.TeamChats))
+                    </DxFormLayoutItem>
+                            <DxFormLayoutItem Caption="RolesBelongToThisTeam:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(TacoTeam.RolesBelongToThisTeam))
+                    </DxFormLayoutItem>
+                            <DxFormLayoutItem Caption="TeamAdminChat:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(TacoTeam.TeamAdminChat))
+                    </DxFormLayoutItem>
+          @*           <DxFormLayoutItem Caption="AccessFailedCount:" ColSpanMd="12" Visible="@IsNew" Enabled="false">
+                        @EditFormContext.GetEditor(nameof(ApplicationUser.AccessFailedCount))
+                    </DxFormLayoutItem>
+                    <DxFormLayoutItem Caption="LockoutEnd:" ColSpanMd="12" Visible="@IsNew" Enabled="false">
+                        @EditFormContext.GetEditor(nameof(ApplicationUser.LockoutEnd))
+                    </DxFormLayoutItem>
+                    <DxFormLayoutItem Caption="Email:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(ApplicationUser.Email))
+                    </DxFormLayoutItem> *@
+                  @*   <DxFormLayoutItem Caption="Roles:" ColSpanMd="12" Visible="@IsNew" Enabled="@IsNew">
+                        <DxListBox 
+                        SelectionMode="ListBoxSelectionMode.Multiple"
+                        @bind-SearchText="@SearchListboxText"
+                        ShowCheckboxes="@true"
+                        ShowSearchBox="true"
+                        SearchTextParseMode="@SearchTextParseMode"
+                        Data="@AvailableRoles"
+                        TextFieldName="Name"
+                        ValueFieldName="ID"
+                        @bind-Values="@CurrentTacoPermissionPolicyRoles">
+                        </DxListBox>
+                    </DxFormLayoutItem> *@
+                </DxFormLayout>
+            </EditFormTemplate>
+             <DetailRowTemplate Context="rowContext">
+                 <TeamDetail Team="(TacoTeam)rowContext.DataItem" />
+          @*        <ChatDetail ChatFullInfo="(TelegramChatFullInfo)rowContext.DataItem" /> *@
+            </DetailRowTemplate>
+            <ToolbarTemplate>
+                <DxToolbar ItemRenderStyleMode="ToolbarRenderStyleMode.Plain">
+                    <Items>
+                        <DxToolbarItem BeginGroup="true" Alignment="ToolbarItemAlignment.Left">
+                            <Template Context="toolbar_item_context">
+                                <div class="d-flex flex-row align-items-center h-100">
+                                    <DxCheckBox Checked="UsePopupEditForm" CheckedChanged="new Func<bool, Task>(UsePopupEditForm_CheckedChanged)">Use Popup Edit Form</DxCheckBox>
+                                </div>
+                            </Template>
+                        </DxToolbarItem>
+                        <DxToolbarItem BeginGroup="true" Alignment="ToolbarItemAlignment.Left">
+                            <Template Context="toolbar_item_context">
+                                <div class="d-flex flex-row align-items-center">
+                                    <DxCheckBox @bind-Checked="AutoCollapseDetailRow">
+                                        Auto Collapse Detail Rows
+                                    </DxCheckBox>
+                                </div>
+                            </Template>
+                        </DxToolbarItem>
+                    </Items>
+                </DxToolbar>
+            </ToolbarTemplate>
+        </DxGrid>
+
+            </Authorized>
+            <NotAuthorized>
+                <h2>You have no rights</h2>
+            </NotAuthorized>
+        </AuthorizeView>
+    </DxLoadingPanel>
+</div>
+@code {
+    private HttpClient? Http = null!;
+    private bool _disposed = false;
+    bool AutoCollapseDetailRow { get; set; }
+
+    public void Dispose()
+    {
+        try
+        {
+            if (!_disposed)
+            {
+                DataSource?.Clear();
+                // AvailableRoles?.Clear();
+                Http?.Dispose();
+                Logger.LogInformation("Executing Dispose");
+                _disposed = true;
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Logger.LogWarning(jsEx, "JSDisconnectedException in Dispose of LoginDisplay. This is expected if the user navigates away before the component is disposed.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in Dispose in LoginDisplay {ex.ToString()}");
+        }
+    }
+    List<TacoTeam> DataSource { get; set; } = new();
+    // List<TacoPermissionPolicyRole> AvailableRoles { get; set; } = new();
+    // IEnumerable</* TacoPermissionPolicyRole */> CurrentTacoPermissionPolicyRoles { get; set; } = new List<TacoPermissionPolicyRole>(); 
+    TacoTeam CurrentTacoTeam { get; set; } = new() { };
+    bool IsNew { get; set; } = true;
+    string SelectionChangesInfo { get; set; } = string.Empty;
+    bool PanelVisible { get; set; } = true;
+    IGrid? Grid { get; set; }
+    bool UsePopupEditForm { get; set; } = false;
+    string SearchListboxText { get; set; } = string.Empty;
+    ListSearchTextParseMode SearchTextParseMode { get; set; } = ListSearchTextParseMode.GroupWordsByAnd;
+    GridEditMode CurrentEditMode { get { return UsePopupEditForm ? GridEditMode.PopupEditForm : GridEditMode.EditForm; } }
+    async Task UsePopupEditForm_CheckedChanged(bool value)
+    {
+        try
+        {
+            UsePopupEditForm = value;
+            ArgumentNullException.ThrowIfNull(Grid);
+            await Grid.CancelEditAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in UsePopupEditForm_CheckedChanged {ex.ToString()}");
+            Notifier.ShowError("TeamAdministrationToasts", $"Exception: {ex.ToString()}", "Error in UsePopupEditForm_CheckedChanged!");
+        }
+
+    }
+    void Grid_CustomizeEditModel(GridCustomizeEditModelEventArgs e)
+    {
+        try
+        {
+            if (e.IsNew)
+            {
+                IsNew = false;
+                var newy = (TacoTeam)e.EditModel;
+                newy.Name = "Enter Name";
+
+            }
+            else
+                IsNew = true;
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in Grid_CustomizeEditModel {ex.ToString()}");
+            Notifier.ShowError("TeamAdministrationToasts", $"Exception: {ex.ToString()}", "Error in Grid_CustomizeEditModel!");
+        }
+
+    }
+    void OnGridEditStart(GridEditStartEventArgs e)
+    {
+        try
+        {
+            if(e.IsNew)
+            {
+                IsNew = false;
+                var newy = new TacoTeam();
+                newy.Name = "Enter Name";
+                CurrentTacoTeam = newy;
+                // var newy = new ApplicationUser();
+                // newy.UserName = "Enter Name";
+                // newy.Email = "bla@legendarymichi.eu";
+                // newy.ID = Guid.NewGuid();
+                // newy.Roles = new List<TacoPermissionPolicyRole>();
+                // if (AvailableRoles != null && AvailableRoles.Count() > 0)
+                // {
+                //     var defaultRole = AvailableRoles.FirstOrDefault(x => x.IsAdministrative == false && x.Name.ToLowerInvariant().Contains("default"));
+                //     if (defaultRole != null)
+                //     {
+                //         newy.Roles.Add(defaultRole);
+                //     }
+                //     else
+                //         newy.Roles.Add(AvailableRoles.FirstOrDefault(x => x.IsAdministrative == false));
+                // }
+                // CurrentUser = newy;
+            }
+            else
+            {
+                IsNew = true;
+                if (e.DataItem is TacoTeam tmpTacoTeam)
+                {
+                    CurrentTacoTeam = tmpTacoTeam;
+                }
+
+            }
+            // if (CurrentUser != null && CurrentUser.Roles != null)
+            //     CurrentTacoPermissionPolicyRoles = CurrentUser.Roles;
+            // else
+            //     CurrentTacoPermissionPolicyRoles = new List<TacoPermissionPolicyRole>();
+
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in Grid_CustomizeEditModel {ex.ToString()}");
+            Notifier.ShowError("TeamAdministrationToasts", $"Exception: {ex.ToString()}", "Error in OnGridEditStart!");
+        }
+    }
+
+    async Task OnGridModelSavingAsync(GridEditModelSavingEventArgs e)
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(Http);
+            PanelVisible = true;
+            bool success = false;
+            //var changedUser = e.EditModel as ApplicationUser;
+            if(e.DataItem is TacoTeam tmpTacoTeam)
+            {
+                if (e.IsNew)
+                {
+                    IsNew = false;
+                    var newTeam = new
+                    {
+                        ID = tmpTacoTeam.ID,
+                        Name = tmpTacoTeam.Name
+                    };
+                    var response = await Http.PostAsync<TacoTeam, object>(newTeam,Logger).ConfigureAwait(false);
+                    if (response != null)
+                    {
+                        Notifier.ShowSuccess("TeamAdministrationToasts", $"Response: '{response}'!", "Success in OnGridModelSavingAsync!");
+
+                    }
+                    else
+                    {
+                        Notifier.ShowError("TeamAdministrationToasts", $"Failed to create TelegramUser: {newTeam.ToJsonString()}", "Error in OnGridModelSavingAsync!");
+                    }
+                }
+                else
+                {
+                    IsNew = true;
+                    // var updatedUser = new
+                    // {
+                    //     ID = tmpApplicationUser.ID,
+                    //     Email = tmpApplicationUser.Email,
+                    //     LockoutEnd = tmpApplicationUser.LockoutEnd,
+                    //     IsActive = tmpApplicationUser.IsActive,
+                    //     ChangePasswordOnFirstLogon = tmpApplicationUser.ChangePasswordOnFirstLogon,
+                    //     UserName = tmpApplicationUser.UserName,
+                    //     AccessFailedCount = tmpApplicationUser.AccessFailedCount,
+                    //     Roles = CurrentTacoPermissionPolicyRoles.Select(newy => new { ID = newy.ID, Name = newy.Name }),
+                    //     StoredPassword = tmpApplicationUser.StoredPassword
+                    // };
+                    // // PatchPartialAsync
+                    // bool success = await WebApi.PatchPartialAsync<ApplicationUser, object>(updatedUser).ConfigureAwait(false);
+
+                    // //Delete deleted Refs
+                    // foreach (var role in tmpApplicationUser.Roles.Where(x => !CurrentTacoPermissionPolicyRoles.Any(y => y.ID == x.ID)))
+                    // {
+                    //     success = await WebApi.DeleteRefAsync<ApplicationUser, TacoPermissionPolicyRole>(tmpApplicationUser, role).ConfigureAwait(false);
+                    //     if (success)
+                    //     {
+
+                    //         Notifier.ShowSuccess("TeamAdministrationToasts", $"TelegramUser '{updatedUser.UserName}' role {role.ToString()} updated successfully!", "Success in OnGridModelSavingAsync!");
+                    //     }
+                    //     else
+                    //     {
+                    //         Notifier.ShowError("TeamAdministrationToasts", $"Failed to update user: {updatedUser.ToJsonString()} role {role.ToString()}", "Error in OnGridModelSavingAsync!");
+                    //     }
+                    // }
+                    // CurrentUser.Roles = CurrentTacoPermissionPolicyRoles.ToList();
+                    // //Put new Refs
+                    // if (CurrentUser.Roles.Count() > 0)
+                    // {
+                    //     success = await WebApi.PutRefAsync<ApplicationUser, TacoPermissionPolicyRole>(CurrentUser).ConfigureAwait(false);
+                    //     if (success)
+                    //     {
+
+                    //         Notifier.ShowSuccess("TeamAdministrationToasts", $"TelegramUser '{updatedUser.UserName}' roles updated successfully!", "Success in OnGridModelSavingAsync!");
+                    //     }
+                    //     else
+                    //     {
+                    //         Notifier.ShowError("TeamAdministrationToasts", $"Failed to update user: {updatedUser.ToJsonString()}", "Error in OnGridModelSavingAsync!");
+                    //     }
+                    // }
+                    // if (success)
+                    // {
+
+                    //     Notifier.ShowSuccess("TeamAdministrationToasts", $"TelegramUser '{updatedUser.UserName}' updated successfully!", "Success in OnGridModelSavingAsync!");
+                    // }
+                    // else
+                    // {
+                    //     Notifier.ShowError("TeamAdministrationToasts", $"Failed to update user: {updatedUser.ToJsonString()}", "Error in OnGridModelSavingAsync!");
+                    // }
+                }
+                ;
+                // CurrentUser = tmpApplicationUser;
+                await OnInitializedAsync().ConfigureAwait(false); 
+            }
+
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in OnGridModelSavingAsync {ex.ToString()}");
+            Notifier.ShowError("TeamAdministrationToasts", $"Exception: {ex.ToString()}", "Error in OnGridModelSavingAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+    async Task OnGridModelDeleteAsync(GridDataItemDeletingEventArgs e)
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(Http);
+            PanelVisible = true;
+
+            if (e.DataItem is TacoTeam tmpTacoTeam)
+            {
+                try
+                {
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+                    {
+                        await Http.DeleteAsync<TacoTeam>(tmpTacoTeam, Logger, cts.Token).ConfigureAwait(false);
+
+                        e.Reload = true;
+                    }
+
+                }
+
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, $"Exception in OnGridModelDeleteAsync: {ex.ToString()}");
+                    Notifier.ShowError("TeamAdministrationToasts", $"Can't delete TacoTeam {tmpTacoTeam.ToString()}Exception: {ex.ToString()}", "Error in OnGridModelDeleteAsync!");
+                }
+            }
+
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in OnGridModelDeleteAsync {ex.ToString()}");
+            Notifier.ShowError("TeamAdministrationToasts", $"Exception: {ex.ToString()}", "Error in OnGridModelDeleteAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+            // await LoadAsync().ConfigureAwait(false);
+
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in OnInitializedAsync {ex.ToString()}");
+            Notifier.ShowError("TeamAdministrationToasts", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+
+    }
+
+    private bool _hasUpdated = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+
+            if (firstRender && !_hasUpdated)
+            {
+                PanelVisible = true;
+                ClientFactory.CreateWASMClient(NavigationManager, Logger, out HttpClient? client);
+                if (client != null) Http = client;
+                await LoadDataAsync().ConfigureAwait(false);
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Exception in OnAfterRenderAsync: {ex.ToString()}");
+            Notifier.ShowError("UserAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in OnAfterRender!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+    async Task LoadDataAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+            if (Http == null)
+            {
+                ClientFactory.CreateWASMClient(NavigationManager, Logger, out HttpClient? client);
+                if (client != null) Http = client;
+            }
+            if (Http != null)
+            {
+                using (var ctsUser = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+                {
+                    var data = await Http.GetAllAsync<TacoTeam>(Logger,ctsUser.Token, additionalQuery: $"$expand={nameof(TacoTeam.TeamChats)}").ConfigureAwait(false);
+                    DataSource = data.ToList();
+                    ArgumentNullException.ThrowIfNull(DataSource);
+                    var tmpEntry = DataSource.FirstOrDefault();
+                    if (tmpEntry != null)
+                        CurrentTacoTeam = tmpEntry;
+                }
+
+                using (var ctsRoles = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+                {
+                    // var roles = await WebApi.GetAllAsync<TacoPermissionPolicyRole>(ctsRoles.Token).ConfigureAwait(false);
+                    // if (roles != null)
+                    // {
+                    //     if (CurrentUser != null)
+                    //         CurrentTacoPermissionPolicyRoles = CurrentUser.Roles;
+                    //     AvailableRoles = roles.ToList();
+                    // }
+                    // else
+                    //     roles = new List<TacoPermissionPolicyRole>();
+                }
+
+                foreach (var user in DataSource)
+                {
+                    // user.Roles = user.Roles
+                    //     .Select(userRole => AvailableRoles.FirstOrDefault(ar => ar.ID == userRole.ID))
+                    //     .Where(ar => ar != null)
+                    //     .ToList();
+                }
+            }
+        
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (HttpRequestException ex)
+        {
+            Logger.LogError(ex, $"Error in LoadAsync HTTPRequestexception: {ex.ToString()}");
+            if (ex.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+            {
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"LoadAsync failed {ex.ToString()}");
+            Notifier.ShowError("TeamAdministrationToasts", ex.Message, "LoadAsync error");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+}

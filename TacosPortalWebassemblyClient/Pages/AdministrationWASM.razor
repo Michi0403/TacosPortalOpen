@@ -1,0 +1,38 @@
+﻿
+@inject INotificationService Notifier
+@rendermode InteractiveWebAssembly
+@page "/administrationwasm"
+<div>
+    <h3>Administration WASM</h3>
+
+    <AuthorizeView>
+        @* Roles="Administrators,TelegramAdmin" *@
+        <Authorized>
+            <ToastWrapperWASM Name="AdmininistrationToastsWASM" ThemeMode="@ToastThemeMode.Dark" />
+            <PageTitle>Administration WASM</PageTitle>
+            <DxSplitter Orientation="Orientation.Vertical" CssClass="admin-splitter">
+                <Panes>
+                    <DxSplitterPane Size="auto" MinSize="200px" AllowResize="true" AllowCollapse="true">
+                        <UserAdministrationWASM />
+                    </DxSplitterPane>
+                    <DxSplitterPane Size="auto" MinSize="200px" AllowResize="true" AllowCollapse="true">
+                        <RoleAdministrationWASM />
+                    </DxSplitterPane>
+
+                    <DxSplitterPane Size="auto" MinSize="200px" AllowResize="true" AllowCollapse="true">
+                        <PermissionPolicyTypePemissiobObjectAdministrationWASM />
+                    </DxSplitterPane>
+                </Panes>
+            </DxSplitter>
+        </Authorized>
+        <NotAuthorized>
+            <h2>You have no rights</h2>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+@code {
+    protected override void OnInitialized()
+    {
+        Notifier.ShowRegular("AdmininistrationToastsWASM", "Welcome to Admin Area", "Godmode");
+    }
+}

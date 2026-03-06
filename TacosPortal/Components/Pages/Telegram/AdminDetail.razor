@@ -1,0 +1,123 @@
+﻿@using TacosCore.BusinessObjects.DataTypes.TelegramTypes
+@using global::Telegram.Bot
+@using global::Telegram.Bot.Types
+@inject ITelegramBotClient telegramBot
+@inject ILogger<AdminDetail> Log
+@inject INotificationService Notifier
+@rendermode InteractiveServer
+<ToastWrapper Name="AdminDetailToast" ThemeMode="@ToastThemeMode.Dark" />
+<style>
+    .auto-size-item {
+        flex: 0 0 auto; /* prevents stretching */
+        align-self: flex-start; /* override align if needed */
+    }
+</style>
+<AuthorizeView Roles="Administrators,TelegramAdmin">
+    <Authorized>
+        <DxPopup @bind-Visible="@PopupChatVisible"
+    ShowFooter="true"
+    HeaderText="Prepare Message">
+    <BodyContentTemplate Context="bodyContentContext">
+                <SendMessage ChatId="@chatId" />
+    </BodyContentTemplate>
+    <FooterContentTemplate Context="footerContentContext">
+        <DxButton CssClass="popup-button" RenderStyle="ButtonRenderStyle.Primary" Text="OK" Click="@(() => PopupChatVisible = false)" />
+        <DxButton CssClass="popup-button" RenderStyle="ButtonRenderStyle.Secondary" Text="Cancel" Click="@(() => PopupChatVisible = false)" />
+    </FooterContentTemplate>
+</DxPopup>
+        <DxStackLayout  Orientation="@currentOrientation">
+            <Items>
+                <DxStackLayoutItem CssClass="auto-size-item" Length="auto">
+                    <Template>
+                            <div>Commands</div>
+                            <DxButtonGroup RenderStyle="ButtonRenderStyle.Secondary" SelectionMode="ButtonGroupSelectionMode.Single">
+                                <Items>
+                                    <DxButtonGroupItem Text="change Title" Click="@(async() =>await ChangeCustomTitle())" />
+                                   @*  <DxButtonGroupItem Text="send Message" Click="@(() => PopupChatVisible = true)" /> *@
+                                </Items>
+                            </DxButtonGroup>
+
+                    </Template>
+                </DxStackLayoutItem>
+                <DxStackLayoutItem CssClass="auto-size-item" Length="auto">
+                    <Template>
+                        <label for="tbChatTitle" >
+                            Administrator Custom Title Field
+                        </label>
+                        <DxTextBox @bind-Text="@TitleValue"
+                                   InputId="tbChatTitle" />
+                   
+                    </Template>
+                </DxStackLayoutItem>
+
+                @* 
+        <DxStackLayoutItem>
+            <Template>
+               
+            </Template>
+        </DxStackLayoutItem>
+        <DxStackLayoutItem>
+            <Template>
+               
+            </Template>
+        </DxStackLayoutItem>  *@
+            </Items>
+        </DxStackLayout>
+    </Authorized>
+    <NotAuthorized>
+        <LoginDisplay />
+    </NotAuthorized>
+</AuthorizeView>
+
+
+
+@code {
+    [Parameter]
+    public TelegramChatFullInfo ChatFullInfo { get; set; } = null!;
+    [Parameter]
+    public ChatMember ChatMember { get; set; } = null!;
+    private ChatId chatId { get; set; }
+    [Parameter]
+    public Orientation currentOrientation { get; set; } = Orientation.Vertical;
+    bool PopupChatVisible { get; set; }
+    string TitleValue { get; set; } = string.Empty;
+    string DescriptionValue { get; set; } = null!;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            long? tgChatID = ChatFullInfo.Chat?.ChatId;
+            if(tgChatID!=null)
+                chatId = new(tgChatID.Value);
+
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in OnInitializedAsync {ex.ToString()}");
+            Notifier.ShowError("AdminDetailToast", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+        }
+
+    }
+    private async Task ChangeCustomTitle()
+    {
+        try
+        {
+
+            await telegramBot.SetChatAdministratorCustomTitle(chatId, ChatMember.User.Id, TitleValue);
+        }
+        catch (OperationCanceledException)
+        { /* ignored – user navigated */
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, $"Error in ChangeTitle {ex.ToString()}");
+            Notifier.ShowError("AdminDetailToast", $"Exception: {ex.ToString()}", "Error in ChangeTitle!");
+        }
+    }
+}

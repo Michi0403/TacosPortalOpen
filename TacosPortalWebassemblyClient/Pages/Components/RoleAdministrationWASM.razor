@@ -1,0 +1,431 @@
+﻿@page "/administrationwasmroles"
+@using System.Collections.ObjectModel
+@using TacosCore.BusinessObjects.DataTypes.PermissionBaseObjects
+@inject NavigationManager NavigationManager
+@inject INotificationService Notifier
+@inject IHttpClientFactory ClientFactory
+@inject IJSRuntime JS
+@implements IDisposable
+@inject ILogger<RoleAdministrationWASM> Logger
+@rendermode InteractiveWebAssembly
+
+<div>
+    <DxLoadingPanel CssClass="w-100" @bind-Visible="PanelVisible" CloseOnClick="true" IndicatorVisible="true"
+                    IsContentBlocked="false"
+                    IndicatorAreaVisible="false"
+                    Text="Fetching Data...">
+        <AuthorizeView>
+            @* Roles="Administrators,TelegramAdmin" *@
+            <Authorized Context="AuthorizedContext">
+  
+                    <h5>Role Administration</h5>
+                    <ToastWrapperWASM Name="RolesAdministrationToastsWASM" />
+
+                    <DxGrid @ref="Grid"
+                    AllowSelectRowByClick="true"
+                    Data="DataSource"
+                    AllowColumnReorder="true"
+                    AllowDragRows="true"
+                    AllowGroup="true"
+                    AllowSort="true"
+                    ShowGroupPanel="true"
+                    ShowFilterRow="true"
+                    ShowSearchBox="true"
+                    SearchBoxNullText="Search for whatever... Fulltext"
+                    KeyFieldName="ID"
+                    ValidationEnabled="false"
+                    EditMode="@CurrentEditMode"
+                    EditStart="OnGridEditStart"
+                    ColumnResizeMode="GridColumnResizeMode.NextColumn"
+                    CustomizeEditModel="Grid_CustomizeEditModel"
+                    TextWrapEnabled="false"
+                    ShowAllRows="true"
+                    HighlightRowOnHover="true" EditorRenderMode="GridEditorRenderMode.Integrated"
+                    SelectionMode="@GridSelectionMode.Single"
+                    EditModelSaving="OnGridModelSavingAsync"
+                    DataItemDeleting="OnGridModelDeleteAsync">
+
+            <Columns>
+                <DxGridCommandColumn  />
+                <DxGridDataColumn FieldName="ID" />
+                <DxGridDataColumn FieldName="Name" />
+                <DxGridDataColumn FieldName="IsAdministrative" />
+                <DxGridDataColumn FieldName="CanEditModel" />
+                <DxGridDataColumn FieldName="PermissionPolicy" />
+            </Columns>
+            <EditFormTemplate Context="EditFormContext">
+                @{
+                    var user = (TacoPermissionPolicyRole)EditFormContext.EditModel;
+                }
+                <DxFormLayout SizeMode="SizeMode.Large">
+
+                    <DxFormLayoutItem Caption="ID:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(TacoPermissionPolicyRole.ID))
+                    </DxFormLayoutItem>
+                    <DxFormLayoutItem Caption="Name:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(TacoPermissionPolicyRole.Name))
+                    </DxFormLayoutItem>
+                    <DxFormLayoutItem Caption="IsAdministrative:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(TacoPermissionPolicyRole.IsAdministrative))
+                    </DxFormLayoutItem>
+                    <DxFormLayoutItem Caption="CanEditModel:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(TacoPermissionPolicyRole.CanEditModel))
+                    </DxFormLayoutItem>
+                    <DxFormLayoutItem Caption="PermissionPolicy:" ColSpanMd="12">
+                        @EditFormContext.GetEditor(nameof(TacoPermissionPolicyRole.PermissionPolicy))
+                    </DxFormLayoutItem>
+                </DxFormLayout>
+            </EditFormTemplate>
+
+                    <ToolbarTemplate Context="toolbarContext">
+                <DxToolbar ItemRenderStyleMode="ToolbarRenderStyleMode.Plain">
+                    <Items>
+                        <DxToolbarItem BeginGroup="true" Alignment="ToolbarItemAlignment.Left">
+                            <Template Context="toolbar_item_context">
+                                <div class="d-flex flex-row align-items-center h-100">
+                                    <DxCheckBox Checked="UsePopupEditForm" CheckedChanged="new Func<bool, Task>(UsePopupEditForm_CheckedChanged)">Use Popup Edit Form</DxCheckBox>
+                                </div>
+                            </Template>
+                        </DxToolbarItem>
+                    </Items>
+                </DxToolbar>
+            </ToolbarTemplate>
+        </DxGrid>
+    
+        </Authorized>
+        <NotAuthorized>
+            <p>Not Authorized or not logged in</p>
+        </NotAuthorized>
+    </AuthorizeView>
+
+    </DxLoadingPanel>
+</div>
+@code {
+    private HttpClient? Http = null!;
+    ObservableCollection<TacoPermissionPolicyRole> DataSource { get; set; } = new();
+    TacoPermissionPolicyRole CurrentPermissionPolicyRole { get; set; } = new() { Name ="New Role Name",IsAdministrative = false,ID = Guid.NewGuid()};
+    string SelectionChangesInfo { get; set; } = string.Empty;
+    bool PanelVisible { get; set; } = true;
+    IGrid? Grid { get; set; }
+    bool UsePopupEditForm { get; set; } = false;
+    string SearchListboxText { get; set; } = string.Empty;
+    ListSearchTextParseMode SearchTextParseMode { get; set; } = ListSearchTextParseMode.GroupWordsByAnd;
+    GridEditMode CurrentEditMode { get { return UsePopupEditForm ? GridEditMode.PopupEditForm : GridEditMode.EditForm; } }
+    private bool _disposed = false;
+    public void Dispose()
+    {
+        try
+        {
+            if(!_disposed)
+            {
+                DataSource?.Clear();
+                Http?.Dispose();
+                Logger.LogInformation("Executing Dispose");
+                _disposed = true;
+            }
+        }
+        catch(JSDisconnectedException)
+        {
+            // Logger.LogWarning(jsEx, "JSDisconnectedException in Dispose of LoginDisplay. This is expected if the user navigates away before the component is disposed.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error in Dispose in LoginDisplay {ex.ToString()}");
+        }
+    }
+    async Task ClearAndReload()
+    {
+        try
+        {
+            DataSource.Clear();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Notifier.ShowError("RolesAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in ClearAndReload!");
+            Logger.LogError(ex, $"Error in ClearAndReload {ex.ToString()}");
+        }
+    }
+    async Task UsePopupEditForm_CheckedChanged(bool value)
+    {
+        try
+        {
+            UsePopupEditForm = value;
+            ArgumentNullException.ThrowIfNull(Grid);
+            await Grid.CancelEditAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Exception in UsePopupEditForm_CheckedChanged: {ex.ToString()}");
+            Notifier.ShowError("RolesAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in UsePopupEditForm_CheckedChanged!");
+        }
+
+    }
+    void Grid_CustomizeEditModel(GridCustomizeEditModelEventArgs e)
+    {
+        try
+        {
+            if (e.IsNew)
+            {
+                var newy = (TacoPermissionPolicyRole)e.EditModel;
+                newy.Name = "New Role Name";
+                newy.IsAdministrative = false;
+                newy.ID = Guid.NewGuid();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Exception in Grid_CustomizeEditModel: {ex.ToString()}");
+            Notifier.ShowError("RolesAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in Grid_CustomizeEditModel!");
+        }
+
+    }
+    void OnGridEditStart(GridEditStartEventArgs e)
+    {
+        try
+        {
+            if (e.IsNew)
+            {
+                var newy = new TacoPermissionPolicyRole();
+                newy.Name = "New Role Name";
+                newy.IsAdministrative = false;
+                newy.ID = Guid.NewGuid();
+                CurrentPermissionPolicyRole = newy;
+            }
+            else
+            {
+                if(e.DataItem!=null && e.DataItem is TacoPermissionPolicyRole currentPermissionPolicyRole)
+                    CurrentPermissionPolicyRole = currentPermissionPolicyRole;
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Exception in OnGridEditStart: {ex.ToString()}");
+            Notifier.ShowError("RolesAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in OnGridEditStart!");
+        }
+    }
+
+    async Task OnGridModelSavingAsync(GridEditModelSavingEventArgs e)
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(Http);
+            PanelVisible = true;
+            bool success = false;
+            if(e.EditModel is TacoPermissionPolicyRole tmpPermissionPolicyRole)
+            {
+                if (e.IsNew)
+                {
+                    var updatedRole = new
+                    {
+                        ID = tmpPermissionPolicyRole.ID,
+                        Name = tmpPermissionPolicyRole.Name,
+                        IsAdministrative = tmpPermissionPolicyRole.IsAdministrative,
+                        CanEditModel = tmpPermissionPolicyRole.CanEditModel,
+                        PermissionPolicy = tmpPermissionPolicyRole.PermissionPolicy
+                    };
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+                    {
+                        var response = await Http.PostAsync<TacoPermissionPolicyRole, object>(updatedRole, Logger, cts.Token).ConfigureAwait(false);
+                        if (response != null)
+                        {
+                            Logger.LogInformation($"Response from server: {response.ToJsonString()}");
+                            Notifier.ShowSuccess("RolesAdministrationToastsWASM", $"Response: '{response}'!", "Success in OnGridModelSavingAsync!");
+                            await ClearAndReload();
+                        }
+                        else
+                        {
+                            Logger.LogInformation($"Response from server was null for: {updatedRole.ToJsonString()}");
+                            Notifier.ShowError("RolesAdministrationToastsWASM", $"Failed to create Role: {updatedRole.ToJsonString()}", "Error in OnGridModelSavingAsync!");
+                        }
+                    }
+
+
+                }
+                else
+                {
+                    var updatedRole = new
+                    {
+                        ID = tmpPermissionPolicyRole.ID,
+                        Name = tmpPermissionPolicyRole.Name,
+                        IsAdministrative = tmpPermissionPolicyRole.IsAdministrative,
+                        CanEditModel = tmpPermissionPolicyRole.CanEditModel,
+                        PermissionPolicy = tmpPermissionPolicyRole.PermissionPolicy
+                    };
+                    // PatchPartialAsync
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+                    {
+                        success = await Http.PatchPartialAsync<TacoPermissionPolicyRole, object>(updatedRole, Logger, cts.Token).ConfigureAwait(false);
+                    }
+
+                    if (success)
+                    {
+                        Logger.LogInformation($"Role updated successfully: {updatedRole.ToJsonString()}");
+                        Notifier.ShowSuccess("RolesAdministrationToastsWASM", $"Role '{updatedRole.Name}' updated successfully!", "Success in OnGridModelSavingAsync!");
+                        await ClearAndReload();
+                    }
+                    else
+                    {
+                        Logger.LogError($"Failed to update Role: {updatedRole.ToJsonString()}");
+
+                        Notifier.ShowError("RolesAdministrationToastsWASM", $"Failed to update Role: {updatedRole.ToJsonString()}", "Error in OnGridModelSavingAsync!");
+                    }
+                }
+                ;
+                if (tmpPermissionPolicyRole != null)
+                    CurrentPermissionPolicyRole = tmpPermissionPolicyRole;
+                await OnInitializedAsync().ConfigureAwait(false);
+            }
+
+        }
+        catch (ArgumentNullException ex)
+        {
+            Notifier.ShowWarning("LoginToastsWasm", $"HttpClient not fully loaded yet maybe? {ex.ToString()}", "Error in OnValidSubmit!");
+            Logger.LogWarning(ex, $"ArgumentNullException in OnGridModelSavingAsync: HttpClient not fully loaded yet maybe? {ex.ToString()}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Exception in OnGridModelSavingAsync: {ex.ToString()}");
+            Notifier.ShowError("RolesAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in OnGridModelSavingAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+    async Task OnGridModelDeleteAsync(GridDataItemDeletingEventArgs e)
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(Http);
+            PanelVisible = true;
+            if(e.DataItem!=null && e.DataItem is TacoPermissionPolicyRole currentPermissionPolicyRole)
+            {
+                try
+                {
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+                    {
+                        await Http.DeleteAsync<TacoPermissionPolicyRole>(currentPermissionPolicyRole, Logger, cts.Token).ConfigureAwait(false);
+                        await ClearAndReload();
+                        e.Reload = true;
+                    }
+                 
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, $"Exception in OnGridModelDeleteAsync: {ex.ToString()}");
+                    Notifier.ShowError("RolesAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in OnGridModelDeleteAsync!");
+                }
+            }
+
+        }
+        catch (ArgumentNullException ex)
+        {
+            Notifier.ShowWarning("LoginToastsWasm", $"HttpClient not fully loaded yet maybe? {ex.ToString()}", "Error in OnValidSubmit!");
+            Logger.LogWarning(ex, $"ArgumentNullException in OnGridModelSavingAsync: HttpClient not fully loaded yet maybe? {ex.ToString()}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Exception in OnGridModelDeleteAsync: {ex.ToString()}");
+            Notifier.ShowError("RolesAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in OnGridModelDeleteAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+
+    }
+
+    private bool _hasUpdated = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+    
+            if (firstRender && !_hasUpdated)
+            {
+                        PanelVisible = true;
+                ClientFactory.CreateWASMClient(NavigationManager, Logger, out HttpClient? client);
+                if (client != null) Http = client;
+                await LoadDataAsync().ConfigureAwait(false);
+                       await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Exception in OnAfterRenderAsync: {ex.ToString()}");
+            Notifier.ShowError("RolesAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in OnAfterRender!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+    protected async Task LoadDataAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+            if (Http == null)
+            {
+                ClientFactory.CreateWASMClient(NavigationManager, Logger, out HttpClient? client);
+                if (client != null) Http = client;
+            }
+            if(Http!=null)
+            {
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+                {
+                    var data = await Http.GetAllAsync<TacoPermissionPolicyRole>(Logger, cts.Token).ConfigureAwait(false);
+
+                    if (data != null)
+                    {
+                        await InvokeAsync(async () =>
+                        {
+                            await DataSource.SyncWith(
+                            data, m => m.ID, configuredTaskAwaitableToInformUpdates: InvokeAsync(StateHasChanged).ConfigureAwait(false)).ConfigureAwait(false);
+                        }).ConfigureAwait(false);
+                    }
+
+
+                    if (DataSource != null && DataSource.Count > 0)
+                        CurrentPermissionPolicyRole = DataSource.First();
+                    _hasUpdated = true;
+                }
+           
+            }
+           
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Exception in LoadDataAsync: {ex.ToString()}");
+            Notifier.ShowError("RolesAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in LoadDataAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            PanelVisible = true;
+            // await LoadDataAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Exception in OnInitializedAsync: {ex.ToString()}");
+            Notifier.ShowError("RolesAdministrationToastsWASM", $"Exception: {ex.ToString()}", "Error in OnInitializedAsync!");
+        }
+        finally
+        {
+            PanelVisible = false;
+        }
+    }
+
+}
