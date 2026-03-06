@@ -1,7 +1,27 @@
 # TacosPortal
 
-Tacos Portal
+# to build
+Dotnet 8 SDK 8.0.24
+VStudio 2022 or 2026
+DX WebApi & Blazor 24.12.14 (Trial or licensed)
+# to build
 
+# to build and run 
+Dotnet 8 SDK 8.0.24
+VStudio 2022 or 2026
+DX WebApi & Blazor 24.12.14 (Trial or licensed)
+add appsettings.json or/and appsettings.Development.json based on the example and provide any values 
+
+I use Microsoft SQL Server on Linux, SQLite should be possible but is untested
+# to build and run this
+
+# Why I share this in this state
+It took me thousands of hours, for the framework (it's totally reuseable) and it breaks my heart to see so much winforms and other disgusting stuff of the past while we can do all without stores,
+with Wasm, on any Operation System (I hosted it on Windows and Linux Server).
+The WinUI Example OnTOp shows how to replace any Winforms app with Blazor and full data and Auth Model so!
+Hope you learn a lot, have fun, do whatever you like.
+
+Tacos Portal
 
 
 it literally breaks my heart but I never have the life time to finish that.
