@@ -49,6 +49,9 @@ The WinUI Host just on windows.
 
 I publish always self contained that I provide dotnet and all.
 
+You might also to change the launchSettings.json and add like mentioned earlier appsettings.json + appsettings.Development.json . It should run in debug, published and so on.
+
+Hosted wasm with that and lets encrypt on linux server and you don't need an appstore for your environment (built on top)
 # to build and run this
 
 # Why I share this in this state
