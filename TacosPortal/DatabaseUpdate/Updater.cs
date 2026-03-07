@@ -948,7 +948,7 @@ SecurityPermissionState.Allow);
                 _ = userManager.CreateUser<ApplicationUser>(
                     ObjectSpace,
                     "sense",
-                    "SenseMilla_1901",
+                    "SenseMilla_1988",
                     (user) => user.Roles.Add(adminRole));
             }
             if (userManager.FindUserByName<ApplicationUser>(ObjectSpace, "TelegramAdminExample") == null)

@@ -13,6 +13,42 @@ DX WebApi & Blazor 24.12.14 (Trial or licensed)
 add appsettings.json or/and appsettings.Development.json based on the example and provide any values 
 
 I use Microsoft SQL Server on Linux, SQLite should be possible but is untested
+
+add that also in connection string.
+
+dotnet ef database update but I shouldn't need to say that.
+If you change the datamodel than add migrations, update the database.
+Users you can add via odata and so on
+
+            if (userManager.FindUserByName<ApplicationUser>(ObjectSpace, "User") == null)
+            {
+                string EmptyPassword = string.Empty;
+                _ = userManager.CreateUser<ApplicationUser>(
+                    ObjectSpace,
+                    "User",
+                    "124308548zSHJAFaOFSUHI()!",
+                    (user) => user.Roles.Add(defaultRole));
+            }
+
+            if (userManager.FindUserByName<ApplicationUser>(ObjectSpace, "Admin") == null)
+            {
+                string EmptyPassword = string.Empty;
+                _ = userManager.CreateUser<ApplicationUser>(
+                    ObjectSpace,
+                    "Admin",
+                    "a789jsbd34abnsdb=22§§(j:M",
+                    (user) => user.Roles.Add(adminRole));
+            }
+
+or in the Database Updater (Typical DevExpress defaults so read the DevExpress Documentation it's nice).
+
+I built all that it finds it self because ports made a lot of problems in hosting, this was a lot of hustle till it worked in any direction and any operation system.
+
+The WASM Frontends work anywhere.
+The WinUI Host just on windows.
+
+I publish always self contained that I provide dotnet and all.
+
 # to build and run this
 
 # Why I share this in this state
