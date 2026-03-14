@@ -1,5 +1,102 @@
 # TacosPortal
 
+# Setup
+I mention that part in appsettings but, the appsettings and subservice settings are not optional.
+
+There are many general things and I rather refer to the official documentation, there is a full appsettings.json example just anonymized.
+Most sub settings are actually unused so it's messy.
+
+1. Botfather in Telegram, you need a bot-token for the TelegramBot.Net (rest is kinda optional) https://github.com/TelegramBots/Telegram.Bot
+
+this example of my framework is totally around the telegram implementation.
+In mapping over many monthes I tried to translate any bot result and message content to it's referential structure and embedded it, in dx xaf webapi style, to it.
+
+https://core.telegram.org/bots/tutorial
+
+to make it short, create a bot in telegram and make it admin in a room of you, never share your secret but with your appsettings.json.
+Better make two for development and production reason (one for the regular config, one for the appsettings.development.json).
+Add it here (atleast token and atleast name for yourself).
+
+The other fields you can ignore:
+
+   "BotConfigurationCore": {
+    "BotToken": "REPLACE_WITH_BOT_TOKEN",
+    "BotName": "Example Bot",
+    "HostAddress": "https://your-app.example.com/",
+    "Route": "/bot",
+    "SecretToken": "REPLACE_WITH_SECRET_TOKEN",
+    "ChatId": "REPLACE_WITH_CHAT_ID"
+  },
+  
+see here in startup.cs
+    services.AddHttpClient("telegram_bot_client")
+        .AddTypedClient<ITelegramBotClient>(
+            (httpClient, sp) =>
+            {
+                ArgumentNullException.ThrowIfNull(configRoot);
+                var botConfig = configRoot.BotConfigurationCore;
+                ArgumentNullException.ThrowIfNull(botConfig);
+                var options = new TelegramBotClientOptions(botConfig.BotToken);
+                return new TelegramBotClient(options, httpClient);
+            });
+			
+2. Many dotnet service tools require you a port, ignore that I needed to manage all over the intended way that all finds each other in all debug and hosting situation. (took years)
+(there might be rests).
+
+3. Really important is this part here:
+  "ServiceConfigurationCore": {
+    "ApiUser": "YourApiUser",
+    "ApiPassword": "REPLACE_WITH_API_PASSWORD"
+  }
+It's for the backend service users to authenticate with the api.
+
+To make it easy use a user you added in the databaseupdater.cs
+
+4. I tested it with any kind of Microsoft SQL Databases I host under windows and linux, anything else possible -> ef but untested so you can change that if you want (but bear the consequences).
+ "ConnectionStringsCore": {
+    "ConnectionString": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;",
+    "EasyTestConnectionString": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;",
+    "DefaultConnection": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;"
+  },
+These are not randomized but not exist anymore so, these were working connection strings.
+
+5. Vapid
+You need to generate that and it needs to fit to your hosting scenario and "public" identity of your monolith. Now there is just a api method to send notifications as test to all, which works but yeah.
+  "Vapid": {
+    "PublicKey": "REPLACE_WITH_VAPID_PUBLIC_KEY",
+    "PrivateKey": "REPLACE_WITH_VAPID_PRIVATE_KEY",
+    "Subject": "mailto:admin@example.com"
+  },
+
+6. Logging
+My logging is probably garbage so you might want to use your own BUT it's written from scratch
+E-Mail is untested and I can say from production it doesn't work on any platform (atleast for the clients).
+
+I separated these level from regular system logging to get a more "fine grained control" for my purpose,
+but because Logging LogLevel in Config have a secret auto mechanic (unreuseable), there is LoggingCore on top of that.
+
+"LoggingCore": {
+    "CoreLogLevel": 4,
+    "FileCore": {
+      "CoreLogLevel": 4,
+      "FilePath": ""
+    },
+    "EmailCore": {
+      "CoreLogLevel": 6,
+      "SenderEmail": "noreply@example.com",
+      "SmtpServer": "smtp.example.com",
+      "SmtpPort": 587,
+      "Username": "smtp-user",
+      "Password": "REPLACE_WITH_SMTP_PASSWORD",
+      "EnableSsl": true,
+      "EmailRecipients": [
+        "recipient@example.com"
+      ]
+    }
+  },
+
+
+
 # to build
 Dotnet 8 SDK 8.0.24
 VStudio 2022 or 2026
