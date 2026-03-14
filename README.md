@@ -1,6 +1,28 @@
 # TacosPortal
 
 # Setup
+
+DevExpress:
+The XAF Webapi is free I guess,
+the blazor components cost but you can use a trial (or just nuget which are trial components).
+
+https://demos.devexpress.com/blazor/
+
+I use a lot Grid's.... Detail Grid's....  https://demos.devexpress.com/blazor/Grid/MasterDetail/NestedGrid
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Components/Pages/Telegram/ChatAdministrators.razor
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Components/Pages/Admin/PermissionPolicyTypePemissiobObjectAdministration.razor
+
+Dx Chat : (they removed that basically, still an AI Chat implementation exist or the naked base implementation I use, they refer now to this component of dxtreme which are also all compatible:
+https://js.devexpress.com/DevExtreme/Guide/UI_Components/Chat/Overview/ )
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Components/Pages/AllChatsMessages.razor
+
+Also including claims rewrote access level like Microsoft Identity but for the DX Security System and Webapi.
+https://docs.devexpress.com/eXpressAppFramework/403394/backend-web-api-service
+https://docs.devexpress.com/eXpressAppFramework/113366/data-security-and-safety/security-system
+
+Most of the code is streamlined for use with dx frontend components 
+(I work as b2b dev and they are since nearly 10 years may personal choice and opensource frontend components would drive straight me into su*cide)
+
 I mention that part in appsettings but, the appsettings and subservice settings are not optional.
 
 There are many general things and I rather refer to the official documentation, there is a full appsettings.json example just anonymized.
@@ -51,6 +73,7 @@ see here in startup.cs
 It's for the backend service users to authenticate with the api.
 
 To make it easy use a user you added in the databaseupdater.cs
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/DatabaseUpdate/Updater.cs
 
 4. I tested it with any kind of Microsoft SQL Databases I host under windows and linux, anything else possible -> ef but untested so you can change that if you want (but bear the consequences).
  "ConnectionStringsCore": {
@@ -95,7 +118,8 @@ but because Logging LogLevel in Config have a secret auto mechanic (unreuseable)
     }
   },
 
-
+7. Update the database with dotnet ef
+https://learn.microsoft.com/en-us/ef/core/cli/dotnet
 
 # to build
 Dotnet 8 SDK 8.0.24
