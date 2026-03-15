@@ -1,0 +1,81 @@
+﻿{
+  "ConnectionStringsCore": {
+    "ConnectionString": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;",
+    "EasyTestConnectionString": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;",
+    "DefaultConnection": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;"
+  },
+  "ConnectionStrings": {
+    "ConnectionString": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;",
+    "EasyTestConnectionString": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;",
+    "DefaultConnection": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;"
+  },
+  "BotConfigurationCore": {
+    "BotToken": "REPLACE_WITH_BOT_TOKEN",
+    "BotName": "Example Bot",
+    "HostAddress": "https://your-app.example.com/",
+    "Route": "/bot",
+    "SecretToken": "REPLACE_WITH_SECRET_TOKEN",
+    "ChatId": "REPLACE_WITH_CHAT_ID"
+  },
+  "ServiceConfigurationCore": {
+    "ApiUser": "YourApiUser",
+    "ApiPassword": "REPLACE_WITH_API_PASSWORD"
+  },
+  "Vapid": {
+    "PublicKey": "REPLACE_WITH_VAPID_PUBLIC_KEY",
+    "PrivateKey": "REPLACE_WITH_VAPID_PRIVATE_KEY",
+    "Subject": "mailto:admin@example.com"
+  },
+  "AuthenticationCore": {
+    "JwtCore": {
+      "Issuer": "YourIssuer",
+      "Audience": "https://your-app.example.com/",
+      "ExpirationMinutes": "60",
+      "IssuerSigningKey": "REPLACE_WITH_JWT_SIGNING_KEY"
+    }
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Error",
+      "Microsoft": "Error",
+      "Api.WebApi": "Error",
+      "Microsoft.AspNetCore.Server.Kestrel": "Error",
+      "Microsoft.AspNetCore.Authorization": "Error",
+      "Microsoft.AspNetCore.Authentication": "Error",
+      "System.Net.Http.HttpClient": "Error",
+      "TacosPortal": "Error",
+      "TacosCore": "Error",
+      "TacosPortalWebassemblyClient": "Error"
+    }
+  },
+  "LoggingCore": {
+    "CoreLogLevel": 4,
+    "FileCore": {
+      "CoreLogLevel": 4,
+      "FilePath": ""
+    },
+    "EmailCore": {
+      "CoreLogLevel": 6,
+      "SenderEmail": "noreply@example.com",
+      "SmtpServer": "smtp.example.com",
+      "SmtpPort": 587,
+      "Username": "smtp-user",
+      "Password": "REPLACE_WITH_SMTP_PASSWORD",
+      "EnableSsl": true,
+      "EmailRecipients": [
+        "recipient@example.com"
+      ]
+    }
+  },
+  "TimeoutCore": {
+    "Milliseconds": "30000"
+  },
+  "PythonCore": {
+    "PythonRuntime": ""
+  },
+  "ApiCore": {
+    "JScriptURL": "https://your-app.example.com",
+    "HttpPort": 8080
+  },
+  "AllowedHosts": "*"
+}

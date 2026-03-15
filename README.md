@@ -1,293 +1,482 @@
 # TacosPortal
+I let chatgpt overwork my readme and overworked it again, this is the result.
+## Overview
 
-# Setup
+TacosPortal is a prototype framework built with **.NET 8**, **DevExpress
+XAF WebAPI**, and **Blazor (WASM + Server Interactive)**.
 
-DevExpress:
-The XAF Webapi is free I guess,
-the blazor components cost but you can use a trial (or just nuget which are trial components).
+The project demonstrates how to build a secure, reusable system that
+combines:
 
-https://demos.devexpress.com/blazor/
+-   DevExpress XAF WebAPI backend
+-   Blazor frontend (WASM + Server Interactive)
+-   Telegram bot integration
+-   claims-based security compatible with the DevExpress Security System
+-   installable WebAssembly frontend
+-   Windows and Linux hosting
+-   optional WinUI host
 
-I use a lot Grid's.... Detail Grid's....  https://demos.devexpress.com/blazor/Grid/MasterDetail/NestedGrid
+The repository represents **many thousands of hours of work** and is
+shared mainly as a **learning and reference implementation**.
+
+It is incomplete in some areas but fully functional in others and
+demonstrates how the different parts of the system connect.
+
+------------------------------------------------------------------------
+
+# Project Structure
+
+The repository is organized into several main projects.
+
+**TacosPortal**\
+ASP.NET Core application that hosts:
+
+-   Blazor Server Interactive frontend
+-   backend services
+-   Telegram bot integration
+-   DevExpress WebAPI
+
+**Core**\
+Contains:
+
+-   business classes
+-   shared core methods
+-   domain model
+
+**TacosPortalWebassemblyClient**\
+The WebAssembly Interactive client used for the installable frontend.
+
+Together these components form what could be described as a
+**Blazor WASM and ASP.NET-Core-based monolithic system including a Winforms like Wrappersystem**.
+
+In germany we would say "Zhis iz Zhe EgglayingWhoolMilkPig" for dotnet in prototyped and ugly.
+
+It behaves like a monolith from a development perspective, but it can
+still be:
+
+-   hosted multiple times
+-   containerized
+-   connected to multiple Telegram bots
+-   connected to multiple message streams
+
+For example multiple bots could feed updates into the same database.
+
+------------------------------------------------------------------------
+
+# Requirements
+
+-   .NET SDK **8.0**
+-   Visual Studio **2022 or later**
+-   DevExpress **Blazor + WebAPI 24.2** (trial or licensed)
+
+DevExpress components are required for the frontend.
+
+You can try them using the trial packages or through NuGet.
+
+Demo examples: https://demos.devexpress.com/blazor/
+
+------------------------------------------------------------------------
+
+# DevExpress Components
+
+The frontend relies heavily on DevExpress components.
+
+Especially:
+
+-   Grid
+-   nested grids
+-   detail views
+-   security integration
+
+Example nested grid:
+https://demos.devexpress.com/blazor/Grid/MasterDetail/NestedGrid
+
+Example pages from this repository:
+
+Chat administrators:
 https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Components/Pages/Telegram/ChatAdministrators.razor
+
+Permission administration:
 https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Components/Pages/Admin/PermissionPolicyTypePemissiobObjectAdministration.razor
 
-Dx Chat : (they removed that basically, still an AI Chat implementation exist or the naked base implementation I use, they refer now to this component of dxtreme which are also all compatible:
-https://js.devexpress.com/DevExtreme/Guide/UI_Components/Chat/Overview/ )
+------------------------------------------------------------------------
+
+# DXChat
+
+DevExpress removed **DXChat** from their documentation even though the
+component still exists and still works.
+
+This project still uses it.
+
+Example implementation:
 https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Components/Pages/AllChatsMessages.razor
 
-Also including claims rewrote access level like Microsoft Identity but for the DX Security System and Webapi.
+DevExpress now refers developers to the **DevExtreme Chat component**:
+
+https://js.devexpress.com/DevExtreme/Guide/UI_Components/Chat/Overview/
+
+Conceptually it is compatible.
+
+------------------------------------------------------------------------
+
+# Security System
+
+The project implements a **claims-based security model** similar to
+Microsoft Identity but integrated with the **DevExpress Security
+System**.
+
+Relevant documentation:
+
+XAF WebAPI:
 https://docs.devexpress.com/eXpressAppFramework/403394/backend-web-api-service
+
+Security system:
 https://docs.devexpress.com/eXpressAppFramework/113366/data-security-and-safety/security-system
 
-Most of the code is streamlined for use with dx frontend components 
-(I work as b2b dev and they are since nearly 10 years may personal choice and opensource frontend components would drive straight me into su*cide)
+The goal was to create a security system that works across:
 
-I mention that part in appsettings but, the appsettings and subservice settings are not optional.
+-   REST APIs
+-   OData
+-   background services
+-   frontends
 
-There are many general things and I rather refer to the official documentation, there is a full appsettings.json example just anonymized.
-Most sub settings are actually unused so it's messy.
+------------------------------------------------------------------------
 
-1. Botfather in Telegram, you need a bot-token for the TelegramBot.Net (rest is kinda optional) https://github.com/TelegramBots/Telegram.Bot
+# Configuration
 
-this example of my framework is totally around the telegram implementation.
-In mapping over many monthes I tried to translate any bot result and message content to it's referential structure and embedded it, in dx xaf webapi style, to it.
+The application requires an **appsettings.json** configuration file.
 
-https://core.telegram.org/bots/tutorial
+A typical setup is:
 
-to make it short, create a bot in telegram and make it admin in a room of you, never share your secret but with your appsettings.json.
-Better make two for development and production reason (one for the regular config, one for the appsettings.development.json).
-Add it here (atleast token and atleast name for yourself).
+appsettings.json\
+appsettings.Development.json
 
-The other fields you can ignore:
+The repository contains anonymized examples.
 
-   "BotConfigurationCore": {
-    "BotToken": "REPLACE_WITH_BOT_TOKEN",
-    "BotName": "Example Bot",
-    "HostAddress": "https://your-app.example.com/",
-    "Route": "/bot",
-    "SecretToken": "REPLACE_WITH_SECRET_TOKEN",
-    "ChatId": "REPLACE_WITH_CHAT_ID"
-  },
-  
-see here in startup.cs
-    services.AddHttpClient("telegram_bot_client")
-        .AddTypedClient<ITelegramBotClient>(
-            (httpClient, sp) =>
-            {
-                ArgumentNullException.ThrowIfNull(configRoot);
-                var botConfig = configRoot.BotConfigurationCore;
-                ArgumentNullException.ThrowIfNull(botConfig);
-                var options = new TelegramBotClientOptions(botConfig.BotToken);
-                return new TelegramBotClient(options, httpClient);
-            });
-			
-2. Many dotnet service tools require you a port, ignore that I needed to manage all over the intended way that all finds each other in all debug and hosting situation. (took years)
-(there might be rests).
+Many configuration sections exist because the system evolved over time,
+so some settings are currently unused.
 
-3. Really important is this part here:
-  "ServiceConfigurationCore": {
-    "ApiUser": "YourApiUser",
-    "ApiPassword": "REPLACE_WITH_API_PASSWORD"
-  }
-It's for the backend service users to authenticate with the api.
+------------------------------------------------------------------------
 
-To make it easy use a user you added in the databaseupdater.cs
-https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/DatabaseUpdate/Updater.cs
+# Telegram Bot Integration
 
-4. I tested it with any kind of Microsoft SQL Databases I host under windows and linux, anything else possible -> ef but untested so you can change that if you want (but bear the consequences).
- "ConnectionStringsCore": {
+The project integrates a full Telegram bot system using:
+
+https://github.com/TelegramBots/Telegram.Bot
+
+Telegram documentation: https://core.telegram.org/bots/tutorial
+
+## Creating a Bot
+
+1.  Use **BotFather** in Telegram
+2.  create a bot
+3.  obtain the bot token
+4.  add the bot to a chat or group
+5.  make the bot administrator
+
+Never share your token publicly.
+
+------------------------------------------------------------------------
+
+# Telegram Configuration
+
+Example configuration:
+
+``` json
+"BotConfigurationCore": {
+  "BotToken": "REPLACE_WITH_BOT_TOKEN",
+  "BotName": "Example Bot",
+  "HostAddress": "https://your-app.example.com/",
+  "Route": "/bot",
+  "SecretToken": "REPLACE_WITH_SECRET_TOKEN",
+  "ChatId": "REPLACE_WITH_CHAT_ID"
+}
+```
+
+Only **BotToken** and **BotName** are required, rest obsolet garbage.
+
+------------------------------------------------------------------------
+
+# Telegram Processing Architecture
+
+Most Telegram bot implementations process updates immediately in the
+update handler.
+
+This system intentionally separates **receiving updates** from
+**processing updates**.
+
+The goal was to create a system that is:
+
+-   scalable
+-   queryable
+-   compatible with DevExpress data systems
+-   usable by background services and dashboards
+
+## Update Pipeline
+
+Incoming Telegram updates follow this flow:
+
+    Telegram
+        ↓
+    UpdateHandler
+        ↓
+    TacosPortalApiService
+        ↓
+    Database (normalized update model)
+        ↓
+    Background Services / Workers
+        ↓
+    Frontend notifications / automation
+
+### 1. UpdateHandler
+
+The bot receives updates through Telegram and forwards them into the
+system:
+
+``` csharp
+_ = tacosApi.NewUpdate(update).ConfigureAwait(false);
+```
+
+Handler implementation:
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Services/Telegram/UpdateHandler.cs
+
+The handler does **not** perform heavy logic.
+
+Its job is only to forward updates.
+
+------------------------------------------------------------------------
+
+### 2. Internal API Service
+
+The update is processed through an internal service layer:
+
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Services/Telegram/TacosPortalApiService.cs
+
+This service:
+
+-   parses the update
+-   maps the update into database entities
+-   normalizes nested Telegram structures
+
+------------------------------------------------------------------------
+
+### 3. Database Normalization
+
+Telegram updates contain many nested objects such as:
+
+-   messages
+-   chats
+-   users
+-   attachments
+-   reactions
+-   commands
+
+The project maps these structures into relational entities.
+
+This required reverse engineering the effective data structure of
+Telegram updates.
+
+The advantage is that updates become:
+
+-   queryable via OData
+-   accessible through DevExpress grids
+-   usable for analytics or automation
+
+------------------------------------------------------------------------
+
+### 4. Worker Services
+
+Background services process updates asynchronously.
+
+Example:
+
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Services/Telegram/TelegramWorkerService.cs
+
+Workers can:
+
+-   update chat metadata
+-   ignore unreachable chats
+-   trigger automation logic
+-   send updates to frontends
+-   integrate with SignalR hubs
+
+This design allows the bot to behave more like an **event ingestion
+system** rather than a simple request-response bot.
+
+------------------------------------------------------------------------
+
+# Example Telegram UI
+
+Example frontend for sending Telegram messages:
+
+Component:
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Components/Pages/AllChatsMessages.razor
+
+Styling:
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Components/Pages/AllChatsMessages.razor.css
+
+------------------------------------------------------------------------
+
+# Database
+
+Tested with:
+
+-   Microsoft SQL Server on Windows (2019-2022)
+-   Microsoft SQL Server on Linux (2019-2022)
+
+Example connection configuration:
+
+``` json
+  "ConnectionStringsCore": {
     "ConnectionString": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;",
     "EasyTestConnectionString": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;",
     "DefaultConnection": "Server=your-server.example.com;Database=YourDatabase;User Id=YourDbUser;Password=YourStrongPasswordHere;TrustServerCertificate=True;Trusted_Connection=False;MultipleActiveResultSets=True;"
   },
-These are not randomized but not exist anymore so, these were working connection strings.
-
-5. Vapid
-You need to generate that and it needs to fit to your hosting scenario and "public" identity of your monolith. Now there is just a api method to send notifications as test to all, which works but yeah.
-  "Vapid": {
-    "PublicKey": "REPLACE_WITH_VAPID_PUBLIC_KEY",
-    "PrivateKey": "REPLACE_WITH_VAPID_PRIVATE_KEY",
-    "Subject": "mailto:admin@example.com"
-  },
-
-6. Logging
-My logging is probably garbage so you might want to use your own BUT it's written from scratch
-E-Mail is untested and I can say from production it doesn't work on any platform (atleast for the clients).
-
-I separated these level from regular system logging to get a more "fine grained control" for my purpose,
-but because Logging LogLevel in Config have a secret auto mechanic (unreuseable), there is LoggingCore on top of that.
+```
 
-"LoggingCore": {
-    "CoreLogLevel": 4,
-    "FileCore": {
-      "CoreLogLevel": 4,
-      "FilePath": ""
-    },
-    "EmailCore": {
-      "CoreLogLevel": 6,
-      "SenderEmail": "noreply@example.com",
-      "SmtpServer": "smtp.example.com",
-      "SmtpPort": 587,
-      "Username": "smtp-user",
-      "Password": "REPLACE_WITH_SMTP_PASSWORD",
-      "EnableSsl": true,
-      "EmailRecipients": [
-        "recipient@example.com"
-      ]
-    }
-  },
+Other EF providers may work but are untested.
+(To help is a bit sqlite untested implemented)
 
-7. Update the database with dotnet ef
-https://learn.microsoft.com/en-us/ef/core/cli/dotnet
+------------------------------------------------------------------------
 
-# to build
-Dotnet 8 SDK 8.0.24
-VStudio 2022 or 2026
-DX WebApi & Blazor 24.12.14 (Trial or licensed)
-# to build
+# Database Initialization
 
-# to build and run 
-Dotnet 8 SDK 8.0.24
-VStudio 2022 or 2026
-DX WebApi & Blazor 24.12.14 (Trial or licensed)
-add appsettings.json or/and appsettings.Development.json based on the example and provide any values 
+Run:
 
-I use Microsoft SQL Server on Linux, SQLite should be possible but is untested
+    dotnet ef database update
 
-add that also in connection string.
+If the data model changes:
 
-dotnet ef database update but I shouldn't need to say that.
-If you change the datamodel than add migrations, update the database.
-Users you can add via odata and so on
+    dotnet ef migrations add MigrationName
+    dotnet ef database update
 
-            if (userManager.FindUserByName<ApplicationUser>(ObjectSpace, "User") == null)
-            {
-                string EmptyPassword = string.Empty;
-                _ = userManager.CreateUser<ApplicationUser>(
-                    ObjectSpace,
-                    "User",
-                    "124308548zSHJAFaOFSUHI()!",
-                    (user) => user.Roles.Add(defaultRole));
-            }
+Example users created by the database updater include:
 
-            if (userManager.FindUserByName<ApplicationUser>(ObjectSpace, "Admin") == null)
-            {
-                string EmptyPassword = string.Empty;
-                _ = userManager.CreateUser<ApplicationUser>(
-                    ObjectSpace,
-                    "Admin",
-                    "a789jsbd34abnsdb=22§§(j:M",
-                    (user) => user.Roles.Add(adminRole));
-            }
+(Add there your own before compiling all and increase the version number always.)
 
-or in the Database Updater (Typical DevExpress defaults so read the DevExpress Documentation it's nice).
+-   User
+-   Admin
 
-I built all that it finds it self because ports made a lot of problems in hosting, this was a lot of hustle till it worked in any direction and any operation system.
+Updater example:
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/DatabaseUpdate/Updater.cs
 
-The WASM Frontends work anywhere.
-The WinUI Host just on windows.
+------------------------------------------------------------------------
 
-I publish always self contained that I provide dotnet and all.
+# VAPID (Push Notifications)
 
-You might also to change the launchSettings.json and add like mentioned earlier appsettings.json + appsettings.Development.json . It should run in debug, published and so on.
+Push notifications require VAPID keys.
 
-Hosted wasm with that and lets encrypt on linux server and you don't need an appstore for your environment (built on top)
-# to build and run this
+Example configuration:
 
-# Why I share this in this state
-It took me thousands of hours, for the framework (it's totally reuseable) and it breaks my heart to see so much winforms and other disgusting stuff of the past while we can do all without stores,
-with Wasm, on any Operation System (I hosted it on Windows and Linux Server).
-I basically stopped using TGram so I don't need to manage groups.
-The WinUI Example OnTOp shows how to replace any Winforms app with Blazor and full data and Auth Model so!
-Hope you learn a lot, have fun, do whatever you like.
+``` json
+"Vapid": {
+  "PublicKey": "REPLACE_WITH_VAPID_PUBLIC_KEY",
+  "PrivateKey": "REPLACE_WITH_VAPID_PRIVATE_KEY",
+  "Subject": "mailto:admin@example.com"
+}
+```
 
-Tacos Portal
+Keys must match the hosting domain.
 
+------------------------------------------------------------------------
 
-it literally breaks my heart but I never have the life time to finish that.
+# Logging
 
-Reverse engineering the data model of telegram and writing the parser sucked all life out of my guts,
+The project contains a custom logging system and most not frontend relevant services are written relatively from scratch (I hate to use libraries).
 
-although the frontend is absolutely fitting any DevExpress Component, evolving it now is nothing I can't take anymore.
+The reason is that ASP.NET logging configuration has limitations when
+trying to control log levels dynamically 
+(in the appsettings.json because microsoft has a word in it using the default LogLevel class).
 
+Therefore a separate configuration section called **LoggingCore**
+exists.
 
+Email logging is included but not fully tested, I can also say from production systems of mine that it doesn't work on smartphones.
+I usually totally rely on debugging debug and production + filelogging on my servers. I feel kinda sorry for that.
 
-Much thanks to the guy who wrote the telegram dotnet bot and to the DevExpress Team
+It's totally reasonable to kick all logging out and replace it with your own solution or logging.net.
 
-(I work with your components for years, with basically any, had dozens of support tickets so I see myself as part of the team)
+------------------------------------------------------------------------
 
+# Hosting
 
+The system can be hosted on:
 
-Because you want money for the "Audit Log" I needed to write it myself from scratch, I hate it and want to replace it so hard but yeah that's your fault.
+-   Windows Server
+-   Linux Server
+-   (Mac us untested, but all general dotnet so it could work)
 
+Typical setup:
 
+-   ASP.NET backend
+-   hosted WASM frontend
+-   HTTPS with Let's Encrypt
 
-My ultimate goal was to write a all ready ERP Platform, Web3 no external cookie, working Public hosted in the Web with Installable WASM Frontend.
+The WASM frontend can run on any modern browser.
 
+The general monolithic startup is done in the program.cs and startup.cs.
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Program.cs
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortal/Startup.cs
 
+Under WinUI Host:
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortalWindows/App.xaml.cs
+https://github.com/Michi0403/TacosPortalOpen/blob/main/TacosPortalWindows/MainWindow.xaml.cs
+------------------------------------------------------------------------
 
-This here is part of my life work and I put really thousands of hours to replace WinForms and give C# and Blazor the love it deserves.
+# WinUI Host
 
+The repository also contains a **WinUI host example**.
 
+The idea is to demonstrate how a Blazor application can replace
+traditional desktop applications such as WinForms while still using the
+same backend and authentication system.
 
-You can replace any ERP and Forms app with this, any smartphone app, embed any WASM Stuff WITH Security and Auth Codebase.
+This host runs only on Windows.
 
+The package project is also included but you can also debug the WinUI host directly.
 
+------------------------------------------------------------------------
 
-What you need is a DX Blazor and WebApi License!
+# Why This Project Exists
 
+This repository represents a personal prototype framework developed over
+several years and I seek always for usecases to continue developing my mainframe.
 
+I started this with a certain telegram group project but at end,
+ would have needed to manage + code all my own and lost all fun to use telegram beside of that.
 
-Their Api is pretty default but I like to use it.
+I started on Dotnet-Framework and threw all over board many times.
 
+The goal was to demonstrate that modern .NET technologies can replace
+traditional desktop and mobile architectures.
 
+Instead of:
 
-I hope this makes you understand Blazor and all connections each side fundamentally.
+-   WinForms
+-   native mobile apps
+-   platform specific stores
 
+applications can run as:
 
+-   installable WebAssembly frontends
+-   browser-based applications
+-   secure backend services
 
-It is basically a monolith system and can even run as Winforms Replacement (It's even better to debug it this way... test it...)
+This system attempts to show how such an architecture could look in
+practice.
+It's not good nor perfect but it shows most parts Web3 BlazorWASM Ecosystems need to provide 
+and can (also how they can work DIRECTLY CONNECTED together in a practical example)
 
+Also I wanted to use NO MODELS and DTO's it drove me insane and reuse the BusinessObjects really anywhere, to exchange data, to display, whatever.
+------------------------------------------------------------------------
 
+# Unrelated Projects of mine
 
-My Icons are "Self" AI Generated so whatever.
-
-
-
-Anyway this is the best Blazor DevExpress Example on the world.
-
-This is the best WASM Example on the World and
-
-it is the most complete useable Telegram Bot Implementation in existence (All bots have just subfeatures, here you have EVERYTHING).
-
-
-
-There is also a lot unused stuff because that is how I built new features, shady in the background. (The generic stuff, decided midway against half way completed).
-
-
-
-I also assume there is no more intact datamodel for the Devexpress XAF System on the market but I could be wrong.
-
-
-
-https://github.com/TelegramBots/Telegram.Bot
-
-
-
-Dotnet 8
-
-Dx 24.2.14
-
-
-
-A fully working Microsoft Identity Replacement till any microservice or frontend, compatible with Rest and OData even with short commands.
-
-
-
-You can provide any infrastructure without playstore, I host these things on Windows, Linux and so on.
-
-
-
-I hope it brings you to new Blazor and ASP.NET Core Levels, sounds arrogant but I know how much that is and mostly written myself (you can't pay enough tokens to generate that datamodel lol)
-
-
-
-Sharing this is deeply personal, it's my last years prototype framework for dotnet8 basically part of my lifeworks and for certain health reasons I'd like to "commit" and "push" just to be sure. 
-
-Incomplete, as is but ALL WAYS work partly so totally powerful demo and tutorial (or more).
-
-Here some other of my free prototype projects
-
-
-
+LocalGPT\
 https://github.com/Michi0403/LocalGPT
 
+OpenMorph.NET\
 https://github.com/Michi0403/OpenMorph.NET
 
-
-
-Older Stuff
-
-https://bitbucket.org/da-legendary-Michi/legendary\_repository/
-
+Older projects\
+https://bitbucket.org/da-legendary-Michi/legendary_repository/

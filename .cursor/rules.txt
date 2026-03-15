@@ -1,0 +1,13 @@
+You are working in the TacosPortal repository.
+
+Project priorities:
+- preserve DevExpress/XAF compatibility
+- keep Telegram update handlers thin
+- prefer service-layer and worker-layer processing
+- do not flatten the architecture into a simple bot
+- preserve appsettings compatibility
+- assume SQL Server is the main supported DB
+- be conservative with refactors and deletes
+
+Mental model:
+Telegram -> handler -> service/API layer -> normalized DB -> workers -> frontend/automation

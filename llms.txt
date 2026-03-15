@@ -1,0 +1,25 @@
+# TacosPortal for LLMs
+
+TacosPortal is a .NET 8 prototype framework built with DevExpress XAF WebAPI, Blazor Server Interactive, Blazor WebAssembly, Telegram bot ingestion, and a claims-based security model integrated with the DevExpress Security System.
+
+Main projects:
+- TacosPortal: host app, services, Telegram integration, UI, API
+- Core: business/domain classes and shared methods
+- TacosPortalWebassemblyClient: WASM frontend
+
+Key architecture:
+- Telegram updates are forwarded into internal services rather than fully handled inline
+- updates are normalized into relational entities
+- background workers process persisted updates later
+- DevExpress/XAF compatibility is a design priority
+
+Important assumptions:
+- SQL Server is the primary tested database target
+- appsettings-based configuration is required
+- DXChat may still be present even if public docs changed
+- preserve custom security and service boundaries when editing
+
+Recommended docs:
+- AGENTS.md
+- CLAUDE.md
+- docs/ARCHITECTURE_FOR_AI.md
